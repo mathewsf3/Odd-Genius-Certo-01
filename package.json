@@ -7,6 +7,12 @@
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "test": "jest",
     "test:api": "ts-node src/test-api.ts",
+    "test:api-client": "jest src/tests/api-client.test.ts",
+    "test:api-performance": "jest src/tests/api-performance.test.ts",
+    "test:api-integration": "jest src/tests/api-integration.test.ts",
+    "test:api-all": "jest src/tests/",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
     "build": "tsc",
     "start": "node dist/server.js"
   },
