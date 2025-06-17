@@ -1,0 +1,25 @@
+{
+    "mcpServers": {
+        "backend-development-server": {
+            "command": "node",
+            "args": [
+                "dist/index.js"
+            ],
+            "type": "local",
+            "tools": [
+                "create_api_endpoint",
+                "create_database_schema",
+                "generate_tests",
+                "analyze_code_quality",
+                "setup_security",
+                "optimize_performance",
+                "create_documentation",
+                "setup_deployment",
+                "analyze_dependencies"
+            ],
+            "env": {
+                "NODE_ENV": "production"
+            }
+        }
+    }
+}

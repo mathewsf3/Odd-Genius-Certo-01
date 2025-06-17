@@ -59,7 +59,7 @@
     // "inlineSourceMap": true,                          /* Include sourcemap files inside the emitted JavaScript. */
     // "noEmit": true,                                   /* Disable emitting files from a compilation. */
     // "outFile": "./",                                  /* Specify a file that bundles all outputs into one JavaScript file. If 'declaration' is true, also designates a file that bundles all .d.ts output. */
-    // "outDir": "./",                                   /* Specify an output folder for all emitted files. */
+    "outDir": "./dist",                                /* Specify an output folder for all emitted files. */
     // "removeComments": true,                           /* Disable emitting comments. */
     // "importHelpers": true,                            /* Allow importing helper functions from tslib once per project, instead of including them per-file. */
     // "downlevelIteration": true,                       /* Emit more compliant, but verbose and less performant JavaScript for iteration. */
@@ -104,10 +104,23 @@
     // "noImplicitOverride": true,                       /* Ensure overriding members in derived classes are marked with an override modifier. */
     // "noPropertyAccessFromIndexSignature": true,       /* Enforces using indexed accessors for keys declared using an indexed type. */
     // "allowUnusedLabels": true,                        /* Disable error reporting for unused labels. */
-    // "allowUnreachableCode": true,                     /* Disable error reporting for unreachable code. */
-
-    /* Completeness */
+    // "allowUnreachableCode": true,                     /* Disable error reporting for unreachable code. */    /* Completeness */
     // "skipDefaultLibCheck": true,                      /* Skip type checking .d.ts files that are included with TypeScript. */
     "skipLibCheck": true                                 /* Skip type checking all .d.ts files. */
-  }
+  },
+  "exclude": [
+    "node_modules",
+    "dist",
+    "frontend/**/*",
+    "frontend-react/**/*",
+    "frontend-components-clean/**/*",
+    "frontend-new/**/*",
+    "mcp-backend-server/src/index-old-broken.ts",
+    "mcp-backend-server/src/documentation-scraper.ts",
+    "mcp-backend-server/src/enhanced-footystats-api-server.ts",
+    "mcp-backend-server/src/mcp-footystats-api-server.ts",
+    "mcp-backend-server/src/simple-documentation-scraper.ts",
+    "mcp-backend-server/src/tests/",
+    "src/demo-api-usage.ts"
+  ]
 }

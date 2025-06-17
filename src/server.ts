@@ -1,17 +1,98 @@
-import express from "express";
-import helmet from "helmet";
-import cors from "cors";
+#!/usr/bin/env node
 
-const app = express();
-const PORT = process.env.PORT || 3000;
+/**
+ * 🚀 Football API Server Entry Point
+ * 
+ * Main server startup file that initializes and starts the application.
+ * Handles graceful shutdown and error management.
+ */
 
-app.use(helmet());
-app.use(cors());
-app.use(express.json());
+import app from './app';
+import { config } from './config';
+import { logger } from './utils/logger';
+import { setupProcessHandlers } from './utils/processManager';
 
-app.get("/health", (_, res) => res.json({ ok: true }));
+async function startServer(): Promise<void> {
+    try {
+        // ASCII Banner
+        console.log(`
+🚀 Football Data API Backend Server
+=============================================
+📊 Complete FootyStats Integration
+⚽ Advanced Football Analytics
+🔒 Production-Ready Security
+🎯 TypeScript + OpenAPI Generated Client
+=============================================
+        `);
 
-app.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT}`);
-    console.log(`📋 Health check: http://localhost:${PORT}/health`);
-});
+        // Setup process handlers for graceful shutdown
+        setupProcessHandlers();
+
+        logger.info('🔧 Configuration loaded successfully');
+
+        // Start the server
+        const server = app.listen(config.port, () => {
+            logger.info(`🚀 Football Data API Server started`);
+            logger.info(`📍 Server running on port ${config.port}`);
+            logger.info(`🌍 Environment: ${config.node_env}`);
+            logger.info(`⚽ FootyStats API configured: ${config.footyStats.baseUrl}`);
+            
+            if (config.node_env === 'development') {
+                logger.info(`🔗 API Endpoints:`);
+                logger.info(`   Health: http://localhost:${config.port}/health`);
+                logger.info(`   API v1: http://localhost:${config.port}/api/v1`);
+                logger.info(`   Matches: http://localhost:${config.port}/api/v1/matches/today`);
+            }
+        });
+
+        // Handle server errors
+        server.on('error', (error: any) => {
+            if (error.syscall !== 'listen') {
+                throw error;
+            }
+
+            const bind = typeof config.port === 'string' 
+                ? 'Pipe ' + config.port 
+                : 'Port ' + config.port;
+
+            switch (error.code) {
+                case 'EACCES':
+                    logger.error(`${bind} requires elevated privileges`);
+                    process.exit(1);
+                    break;
+                case 'EADDRINUSE':
+                    logger.error(`${bind} is already in use`);
+                    process.exit(1);
+                    break;
+                default:
+                    throw error;
+            }
+        });
+
+        // Graceful shutdown
+        const gracefulShutdown = () => {
+            logger.info('🛑 Received shutdown signal, closing server gracefully...');
+            
+            server.close(() => {
+                logger.info('✅ Server closed successfully');
+                process.exit(0);
+            });
+
+            // Force close after 10 seconds
+            setTimeout(() => {
+                logger.error('❌ Could not close connections in time, forcefully shutting down');
+                process.exit(1);
+            }, 10000);
+        };
+
+        process.on('SIGTERM', gracefulShutdown);
+        process.on('SIGINT', gracefulShutdown);
+
+    } catch (error) {
+        logger.error('❌ Failed to start server:', error);
+        process.exit(1);
+    }
+}
+
+// Start the server
+startServer();

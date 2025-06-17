@@ -11337,4 +11337,41 @@ Your API Key
     },
     "message": ""
 }
+## Get Leagues
+
+### GET
+URL: `/leagues`
+
+**Description:** Get all available leagues
+
+**Parameters:**
+
+
+---
+
+
+## Get Countries
+
+### GET
+URL: `/countries`
+
+**Description:** Returns JSON array of Countries and ISO numbers
+
+**Parameters:**
+
+
+---
+
+
+## Get Today's Matches
+
+### GET
+URL: `/matches`
+
+**Description:** Get today's matches with or without stats
+
+**Parameters:**
+- **date** (string): Date in YYYY-MM-DD format
+
+---
 

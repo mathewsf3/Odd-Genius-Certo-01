@@ -19,4 +19,16 @@ export type { Referee } from './models/Referee';
 export type { Season } from './models/Season';
 export type { Team } from './models/Team';
 
+export { $ApiResponse } from './schemas/$ApiResponse';
+export { $Country } from './schemas/$Country';
+export { $League } from './schemas/$League';
+export { $LeagueSeason } from './schemas/$LeagueSeason';
+export { $Match } from './schemas/$Match';
+export { $Pager } from './schemas/$Pager';
+export { $PaginatedResponse } from './schemas/$PaginatedResponse';
+export { $Player } from './schemas/$Player';
+export { $Referee } from './schemas/$Referee';
+export { $Season } from './schemas/$Season';
+export { $Team } from './schemas/$Team';
+
 export { DefaultService } from './services/DefaultService';

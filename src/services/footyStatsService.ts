@@ -1,270 +1,1485 @@
-import { OpenAPI, DefaultService } from '../apis/footy';
-import type { 
-  ApiResponse, 
-  Country, 
-  League, 
-  Match, 
-  PaginatedResponse 
-} from '../apis/footy';
-
 /**
- * FootyStats API Service
- * Wrapper around the generated API client that automatically includes the API key
+ * 🏈 FOOTYSTATS SERVICE - CORE SERVICES LAYER
+ * 
+ * Comprehensive service for all FootyStats API endpoints with:
+ * - Phase 1 integration (DTOs, Cache, Constants)
+ * - Proper error handling and logging
+ * - Caching with appropriate TTL strategies
+ * - Type safety with DTOs
  */
-export class FootyStatsService {
-  private static apiKey: string = '4fd202fbc338fbd450e91761c7b83641606b2a4da37dd1a7d29b4cd1d4de9756';
 
-  static {
-    // Configure the base URL
-    OpenAPI.BASE = 'https://api.football-data-api.com';
-  }
+import { DefaultService } from '../apis/footy';
+import { cacheKeys } from '../cache/CacheKeys';
+import { CacheManager } from '../cache/CacheManager';
+import {
+    Country,
+    League,
+    LeagueSeason,
+    Match,
+    PaginationOptions,
+    ServiceResponse,
+    Team
+} from '../models';
+import { CACHE_TTL, FOOTY_ENDPOINTS } from '../utils/constants/footballConstants';
 
-  /**
-   * Set a custom API key
-   */
-  static setApiKey(key: string) {
-    this.apiKey = key;
-  }
+// API Key from environment variables
+const API_KEY = process.env.FOOTBALL_API_KEY || (() => {
+  throw new Error('FOOTBALL_API_KEY environment variable is required');
+})();
 
-  /**
-   * Get all available countries
-   */
-  static async getCountries(): Promise<(ApiResponse & { data?: Array<Country> })> {
-    const originalRequest = DefaultService.getCountries;
-    return this.withApiKey(() => originalRequest());
-  }
-
-  /**
-   * Get all available leagues
-   */
-  static async getLeagues(
-    chosenLeaguesOnly?: 'true' | 'false',
-    country?: number
-  ): Promise<(ApiResponse & { data?: Array<League> })> {
-    const originalRequest = DefaultService.getLeagues;
-    return this.withApiKey(() => originalRequest(chosenLeaguesOnly, country));
-  }
-
-  /**
-   * Get today's matches
-   */
-  static async getTodaysMatches(
-    timezone?: string,
-    date?: string,
-    page: number = 1
-  ): Promise<(PaginatedResponse & { data?: Array<Match> })> {
-    const originalRequest = DefaultService.getTodaysMatches;
-    return this.withApiKey(() => originalRequest(timezone, date, page));
-  }
-
-  /**
-   * Get league season stats and teams
-   */
-  static async getLeagueSeason(
-    seasonId: number,
-    maxTime?: number
-  ): Promise<ApiResponse> {
-    const originalRequest = DefaultService.getLeagueSeason;
-    return this.withApiKey(() => originalRequest(seasonId, maxTime));
-  }
-
-  /**
-   * Get league matches
-   */
-  static async getLeagueMatches(
-    seasonId: number,
-    page: number = 1,
-    maxPerPage: number = 300,
-    maxTime?: number
-  ): Promise<(ApiResponse & { data?: Array<Match> })> {
-    const originalRequest = DefaultService.getLeagueMatches;
-    return this.withApiKey(() => originalRequest(seasonId, page, maxPerPage, maxTime));
-  }
-
-  /**
-   * Get teams in a league season
-   */
-  static async getLeagueTeams(
-    seasonId: number,
-    page: number = 1,
-    include?: 'stats',
-    maxTime?: number
-  ): Promise<PaginatedResponse> {
-    const originalRequest = DefaultService.getLeagueTeams;
-    return this.withApiKey(() => originalRequest(seasonId, page, include, maxTime));
-  }
-
-  /**
-   * Get league players
-   */
-  static async getLeaguePlayers(
-    seasonId: number,
-    include?: 'stats'
-  ): Promise<ApiResponse> {
-    const originalRequest = DefaultService.getLeaguePlayers;
-    return this.withApiKey(() => originalRequest(seasonId, include));
-  }
-
-  /**
-   * Get league referees
-   */
-  static async getLeagueReferees(seasonId: number): Promise<ApiResponse> {
-    const originalRequest = DefaultService.getLeagueReferees;
-    return this.withApiKey(() => originalRequest(seasonId));
-  }
-
-  /**
-   * Get individual team data
-   */
-  static async getTeam(
-    teamId: number,
-    include?: 'stats'
-  ): Promise<ApiResponse> {
-    const originalRequest = DefaultService.getTeam;
-    return this.withApiKey(() => originalRequest(teamId, include));
-  }
-
-  /**
-   * Get last X stats for a team
-   */
-  static async getTeamLastXStats(teamId: number): Promise<ApiResponse> {
-    const originalRequest = DefaultService.getTeamLastXStats;
-    return this.withApiKey(() => originalRequest(teamId));
-  }
-
-  /**
-   * Get match details
-   */
-  static async getMatch(matchId: number): Promise<ApiResponse> {
-    const originalRequest = DefaultService.getMatch;
-    return this.withApiKey(() => originalRequest(matchId));
-  }
-
-  /**
-   * Get league tables
-   */
-  static async getLeagueTables(seasonId: number): Promise<ApiResponse> {
-    const originalRequest = DefaultService.getLeagueTables;
-    return this.withApiKey(() => originalRequest(seasonId));
-  }
-
-  /**
-   * Get individual player stats
-   */
-  static async getPlayerStats(playerId: number): Promise<ApiResponse> {
-    const originalRequest = DefaultService.getPlayerStats;
-    return this.withApiKey(() => originalRequest(playerId));
-  }
-
-  /**
-   * Get individual referee stats
-   */
-  static async getRefereeStats(refereeId: number): Promise<ApiResponse> {
-    const originalRequest = DefaultService.getRefereeStats;
-    return this.withApiKey(() => originalRequest(refereeId));
-  }
-
-  /**
-   * Get BTTS stats
-   */
-  static async getBTTSStats(): Promise<ApiResponse> {
-    const originalRequest = DefaultService.getBttsStats;
-    return this.withApiKey(() => originalRequest());
-  }
-
-  /**
-   * Get Over 2.5 stats
-   */
-  static async getOver25Stats(): Promise<ApiResponse> {
-    const originalRequest = DefaultService.getOver25Stats;
-    return this.withApiKey(() => originalRequest());
-  }
-
-  /**
-   * Helper method to add API key to requests
-   * This is a workaround since the generated client doesn't handle API key query params automatically
-   */
-  private static async withApiKey<T>(requestFn: () => Promise<T>): Promise<T> {
-    // Store original interceptor
-    const originalInterceptor = OpenAPI.HEADERS;
-    
-    try {
-      // Add API key as query parameter by modifying the request
-      // Since we can't easily modify query params, we'll modify the base URL temporarily
-      const originalBase = OpenAPI.BASE;
-      
-      // For now, we'll need to handle this differently
-      // The generated client should include the key parameter in each request
-      // Let's just call the original function and handle the key in the URL
-      
-      return await requestFn();
-    } finally {
-      // Restore original interceptor
-      OpenAPI.HEADERS = originalInterceptor;
-    }
-  }
+export interface LeagueOptions {
+  chosenOnly?: boolean;
+  country?: number;
 }
 
-/**
- * Convenience functions for common operations
- */
-export class FootyStatsHelpers {
-  /**
-   * Get leagues for a specific country
-   */
-  static async getLeaguesByCountry(countryId: number) {
-    const response = await FootyStatsService.getLeagues(undefined, countryId);
-    return response.data || [];
+export interface TeamStatsOptions {
+  includeStats?: boolean;
+  matchCount?: number;
+}
+
+export class FootyStatsService {
+  private cacheManager: CacheManager;
+
+  constructor() {
+    // Initialize cache manager with football-optimized settings
+    this.cacheManager = new CacheManager({
+      defaultTtl: CACHE_TTL.DEFAULT,
+      maxMemoryUsage: 50 * 1024 * 1024, // 50MB
+      cleanupIntervalMs: 300000 // 5 minutes
+    });
   }
 
   /**
-   * Get complete league information (season, teams, recent matches)
+   * 🌍 GET COUNTRIES
+   * Retrieves all available countries
    */
-  static async getCompleteLeagueInfo(seasonId: number) {
-    const [seasonInfo, teams, matches] = await Promise.all([
-      FootyStatsService.getLeagueSeason(seasonId),
-      FootyStatsService.getLeagueTeams(seasonId, 1, 'stats'),
-      FootyStatsService.getLeagueMatches(seasonId, 1, 20)
-    ]);
+  async getCountries(): Promise<ServiceResponse<Country[]>> {
+    const startTime = Date.now();
+    const cacheKey = cacheKeys.countries();
 
-    return {
-      season: seasonInfo,
-      teams: teams,
-      recentMatches: matches
-    };
+    try {
+      console.log('🌍 Getting countries...');
+
+      // Check cache first
+      const cachedData = await this.cacheManager.get<Country[]>(cacheKey);
+      if (cachedData) {
+        console.log('✅ Countries retrieved from cache');
+        return {
+          success: true,
+          data: cachedData,
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: FOOTY_ENDPOINTS.COUNTRIES,
+            processingTime: Date.now() - startTime,
+            cached: true
+          }
+        };
+      }
+
+      // Fetch from API
+      console.log('🔍 Fetching countries from API...');
+      const response = await DefaultService.getCountries(API_KEY);
+
+      if (!response?.data) {
+        return {
+          success: false,
+          error: 'No countries data returned from API',
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: FOOTY_ENDPOINTS.COUNTRIES,
+            processingTime: Date.now() - startTime
+          }
+        };
+      }
+
+      const countries = Array.isArray(response.data) ? response.data : [];
+      console.log(`✅ Retrieved ${countries.length} countries from API`);
+
+      // Cache the data
+      await this.cacheManager.set(cacheKey, countries, {
+        ttl: CACHE_TTL.COUNTRIES,
+        tags: ['countries', 'reference-data']
+      });
+
+      return {
+        success: true,
+        data: countries,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          source: FOOTY_ENDPOINTS.COUNTRIES,
+          processingTime: Date.now() - startTime,
+          cached: false
+        }
+      };
+
+    } catch (error) {
+      console.error('❌ Error in getCountries:', error);
+      return {
+        success: false,
+        error: `Failed to get countries: ${error instanceof Error ? error.message : String(error)}`,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          source: FOOTY_ENDPOINTS.COUNTRIES,
+          processingTime: Date.now() - startTime
+        }
+      };
+    }
   }
 
   /**
-   * Get team analysis with recent form
+   * 🏆 GET LEAGUES
+   * Retrieves leagues with optional filtering
    */
-  static async getTeamAnalysis(teamId: number) {
-    const [teamData, lastXStats] = await Promise.all([
-      FootyStatsService.getTeam(teamId, 'stats'),
-      FootyStatsService.getTeamLastXStats(teamId)
-    ]);
+  async getLeagues(options?: LeagueOptions): Promise<ServiceResponse<League[]>> {
+    const startTime = Date.now();
+    const cacheKey = cacheKeys.leagues(options?.chosenOnly, options?.country);
 
-    return {
-      team: teamData,
-      recentForm: lastXStats
-    };
+    try {
+      console.log('🏆 Getting leagues...', options);
+
+      // Check cache first
+      const cachedData = await this.cacheManager.get<League[]>(cacheKey);
+      if (cachedData) {
+        console.log('✅ Leagues retrieved from cache');
+        return {
+          success: true,
+          data: cachedData,
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: FOOTY_ENDPOINTS.LEAGUES,
+            processingTime: Date.now() - startTime,
+            cached: true
+          }
+        };
+      }
+
+      // Validate country parameter if provided
+      if (options?.country && (options.country <= 0 || !Number.isInteger(options.country))) {
+        return {
+          success: false,
+          error: 'Invalid country ID: must be a positive integer',
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: FOOTY_ENDPOINTS.LEAGUES,
+            processingTime: Date.now() - startTime
+          }
+        };
+      }
+
+      // Fetch from API
+      console.log('🔍 Fetching leagues from API...');
+      const chosenOnlyParam = options?.chosenOnly ? "true" : undefined;
+      const response = await DefaultService.getLeagues(API_KEY, chosenOnlyParam, options?.country);
+
+      if (!response?.data) {
+        return {
+          success: false,
+          error: 'No leagues data returned from API',
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: FOOTY_ENDPOINTS.LEAGUES,
+            processingTime: Date.now() - startTime
+          }
+        };
+      }
+
+      const leagues = Array.isArray(response.data) ? response.data : [];
+      console.log(`✅ Retrieved ${leagues.length} leagues from API`);
+
+      // Cache the data
+      await this.cacheManager.set(cacheKey, leagues, {
+        ttl: CACHE_TTL.LEAGUES,
+        tags: ['leagues', 'reference-data']
+      });
+
+      return {
+        success: true,
+        data: leagues,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          source: FOOTY_ENDPOINTS.LEAGUES,
+          processingTime: Date.now() - startTime,
+          cached: false
+        }
+      };
+
+    } catch (error) {
+      console.error('❌ Error in getLeagues:', error);
+      return {
+        success: false,
+        error: `Failed to get leagues: ${error instanceof Error ? error.message : String(error)}`,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          source: FOOTY_ENDPOINTS.LEAGUES,
+          processingTime: Date.now() - startTime
+        }
+      };
+    }
   }
 
   /**
-   * Search for leagues by name (client-side filtering)
+   * 📅 GET TODAY'S MATCHES
+   * Retrieves matches for a specific date
    */
-  static async searchLeagues(searchTerm: string) {
-    const response = await FootyStatsService.getLeagues();
-    const leagues = response.data || [];
-    
-    return leagues.filter(league => 
-      league.name?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+  async getTodaysMatches(date?: string, timezone?: string, page?: number): Promise<ServiceResponse<Match[]>> {
+    const startTime = Date.now();
+    const targetDate = date || new Date().toISOString().split('T')[0];
+    const cacheKey = cacheKeys.todaysMatches(targetDate, timezone, page);
+
+    try {
+      console.log(`📅 Getting matches for ${targetDate}...`);
+
+      // Check cache first (short TTL for live data)
+      const cachedData = await this.cacheManager.get<Match[]>(cacheKey);
+      if (cachedData) {
+        console.log('✅ Today\'s matches retrieved from cache');
+        return {
+          success: true,
+          data: cachedData,
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: FOOTY_ENDPOINTS.TODAYS_MATCHES,
+            processingTime: Date.now() - startTime,
+            cached: true
+          }
+        };
+      }
+
+      // Fetch from API
+      console.log('🔍 Fetching today\'s matches from API...');
+      const response = await DefaultService.getTodaysMatches(API_KEY, timezone, targetDate, page || 1);
+
+      if (!response?.data) {
+        return {
+          success: false,
+          error: 'No matches data returned from API',
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: FOOTY_ENDPOINTS.TODAYS_MATCHES,
+            processingTime: Date.now() - startTime
+          }
+        };
+      }
+
+      const matches = Array.isArray(response.data) ? response.data : [];
+      console.log(`✅ Retrieved ${matches.length} matches for ${targetDate}`);
+
+      // Cache with short TTL for live data
+      await this.cacheManager.set(cacheKey, matches, {
+        ttl: CACHE_TTL.LIVE_MATCHES,
+        tags: ['matches', 'live-data', 'today']
+      });
+
+      return {
+        success: true,
+        data: matches,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          source: FOOTY_ENDPOINTS.TODAYS_MATCHES,
+          processingTime: Date.now() - startTime,
+          cached: false
+        }
+      };
+
+    } catch (error) {
+      console.error('❌ Error in getTodaysMatches:', error);
+      return {
+        success: false,
+        error: `Failed to get today's matches: ${error instanceof Error ? error.message : String(error)}`,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          source: FOOTY_ENDPOINTS.TODAYS_MATCHES,
+          processingTime: Date.now() - startTime
+        }
+      };
+    }
   }
 
   /**
-   * Get matches for a specific date
+   * 🏟️ GET MATCH
+   * Retrieves detailed match information
    */
-  static async getMatchesForDate(date: string, timezone?: string) {
-    return FootyStatsService.getTodaysMatches(timezone, date);
+  async getMatch(matchId: number): Promise<ServiceResponse<Match>> {
+    const startTime = Date.now();
+    const cacheKey = cacheKeys.match(matchId);
+
+    try {
+      console.log(`🏟️ Getting match details for ID: ${matchId}`);
+
+      // Validate match ID
+      if (!matchId || matchId <= 0 || !Number.isInteger(matchId)) {
+        return {
+          success: false,
+          error: 'Invalid match ID: must be a positive integer',
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: FOOTY_ENDPOINTS.MATCH,
+            processingTime: Date.now() - startTime
+          }
+        };
+      }
+
+      // Check cache first
+      const cachedData = await this.cacheManager.get<Match>(cacheKey);
+      if (cachedData) {
+        console.log('✅ Match details retrieved from cache');
+        return {
+          success: true,
+          data: cachedData,
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: FOOTY_ENDPOINTS.MATCH,
+            processingTime: Date.now() - startTime,
+            cached: true
+          }
+        };
+      }
+
+      // Fetch from API
+      console.log('🔍 Fetching match details from API...');
+      const response = await DefaultService.getMatch(matchId, API_KEY);
+
+      if (!response?.data) {
+        return {
+          success: false,
+          error: `Match with ID ${matchId} not found`,
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: FOOTY_ENDPOINTS.MATCH,
+            processingTime: Date.now() - startTime
+          }
+        };
+      }
+
+      // Handle API response - might be array or single object
+      const matchData = Array.isArray(response.data) ? response.data[0] : response.data;
+      const match = matchData as unknown as Match;
+      console.log(`✅ Retrieved match details for match ID: ${matchId}`);
+
+      // Cache the data
+      await this.cacheManager.set(cacheKey, match, {
+        ttl: CACHE_TTL.MATCH_DETAILS,
+        tags: ['matches', 'match-details', `match-${matchId}`]
+      });
+
+      return {
+        success: true,
+        data: match,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          source: FOOTY_ENDPOINTS.MATCH,
+          processingTime: Date.now() - startTime,
+          cached: false
+        }
+      };
+
+    } catch (error) {
+      console.error('❌ Error in getMatch:', error);
+      return {
+        success: false,
+        error: `Failed to get match details: ${error instanceof Error ? error.message : String(error)}`,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          source: FOOTY_ENDPOINTS.MATCH,
+          processingTime: Date.now() - startTime
+        }
+      };
+    }
+  }
+
+  /**
+   * 🏆 GET LEAGUE SEASON
+   * Retrieves league season information
+   */
+  async getLeagueSeason(seasonId: number, maxTime?: number): Promise<ServiceResponse<LeagueSeason>> {
+    const startTime = Date.now();
+    const cacheKey = cacheKeys.leagueSeason(seasonId, maxTime);
+
+    try {
+      console.log(`🏆 Getting league season for ID: ${seasonId}`);
+
+      // Validate season ID
+      if (!seasonId || seasonId <= 0 || !Number.isInteger(seasonId)) {
+        return {
+          success: false,
+          error: 'Invalid season ID: must be a positive integer',
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: FOOTY_ENDPOINTS.LEAGUE_SEASON,
+            processingTime: Date.now() - startTime
+          }
+        };
+      }
+
+      // Check cache first
+      const cachedData = await this.cacheManager.get<LeagueSeason>(cacheKey);
+      if (cachedData) {
+        console.log('✅ League season retrieved from cache');
+        return {
+          success: true,
+          data: cachedData,
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: FOOTY_ENDPOINTS.LEAGUE_SEASON,
+            processingTime: Date.now() - startTime,
+            cached: true
+          }
+        };
+      }
+
+      // Fetch from API
+      console.log('🔍 Fetching league season from API...');
+      const response = await DefaultService.getLeagueSeason(seasonId, API_KEY, maxTime);
+
+      if (!response?.data) {
+        return {
+          success: false,
+          error: `League season with ID ${seasonId} not found`,
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: FOOTY_ENDPOINTS.LEAGUE_SEASON,
+            processingTime: Date.now() - startTime
+          }
+        };
+      }
+
+      const leagueSeason = response.data as unknown as LeagueSeason;
+      console.log(`✅ Retrieved league season for ID: ${seasonId}`);
+
+      // Cache the data
+      await this.cacheManager.set(cacheKey, leagueSeason, {
+        ttl: CACHE_TTL.LEAGUE_SEASON,
+        tags: ['leagues', 'seasons', `season-${seasonId}`]
+      });
+
+      return {
+        success: true,
+        data: leagueSeason,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          source: FOOTY_ENDPOINTS.LEAGUE_SEASON,
+          processingTime: Date.now() - startTime,
+          cached: false
+        }
+      };
+
+    } catch (error) {
+      console.error('❌ Error in getLeagueSeason:', error);
+      return {
+        success: false,
+        error: `Failed to get league season: ${error instanceof Error ? error.message : String(error)}`,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          source: FOOTY_ENDPOINTS.LEAGUE_SEASON,
+          processingTime: Date.now() - startTime
+        }
+      };
+    }
+  }
+
+  /**
+   * 🏟️ GET LEAGUE MATCHES
+   * Retrieves matches for a specific league season
+   */
+  async getLeagueMatches(seasonId: number, options?: PaginationOptions & { maxTime?: number }): Promise<ServiceResponse<Match[]>> {
+    const startTime = Date.now();
+    const cacheKey = cacheKeys.leagueMatches(seasonId, options?.page, options?.maxPerPage, options?.maxTime);
+
+    try {
+      console.log(`🏟️ Getting league matches for season ID: ${seasonId}`);
+
+      // Validate season ID
+      if (!seasonId || seasonId <= 0 || !Number.isInteger(seasonId)) {
+        return {
+          success: false,
+          error: 'Invalid season ID: must be a positive integer',
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: FOOTY_ENDPOINTS.LEAGUE_MATCHES,
+            processingTime: Date.now() - startTime
+          }
+        };
+      }
+
+      // Check cache first
+      const cachedData = await this.cacheManager.get<Match[]>(cacheKey);
+      if (cachedData) {
+        console.log('✅ League matches retrieved from cache');
+        return {
+          success: true,
+          data: cachedData,
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: FOOTY_ENDPOINTS.LEAGUE_MATCHES,
+            processingTime: Date.now() - startTime,
+            cached: true
+          }
+        };
+      }
+
+      // Fetch from API
+      console.log('🔍 Fetching league matches from API...');
+      const response = await DefaultService.getLeagueMatches(
+        seasonId,
+        API_KEY,
+        options?.page || 1,
+        options?.maxPerPage || 300,
+        options?.maxTime
+      );
+
+      if (!response?.data) {
+        return {
+          success: false,
+          error: `No matches found for season ID ${seasonId}`,
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: FOOTY_ENDPOINTS.LEAGUE_MATCHES,
+            processingTime: Date.now() - startTime
+          }
+        };
+      }
+
+      const matches = Array.isArray(response.data) ? response.data : [];
+      console.log(`✅ Retrieved ${matches.length} matches for season ${seasonId}`);
+
+      // Cache the data
+      await this.cacheManager.set(cacheKey, matches, {
+        ttl: CACHE_TTL.LEAGUE_MATCHES,
+        tags: ['leagues', 'matches', `season-${seasonId}`]
+      });
+
+      return {
+        success: true,
+        data: matches,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          source: FOOTY_ENDPOINTS.LEAGUE_MATCHES,
+          processingTime: Date.now() - startTime,
+          cached: false
+        }
+      };
+
+    } catch (error) {
+      console.error('❌ Error in getLeagueMatches:', error);
+      return {
+        success: false,
+        error: `Failed to get league matches: ${error instanceof Error ? error.message : String(error)}`,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          source: FOOTY_ENDPOINTS.LEAGUE_MATCHES,
+          processingTime: Date.now() - startTime
+        }
+      };
+    }
+  }
+
+  /**
+   * 👥 GET LEAGUE TEAMS
+   * Retrieves teams for a specific league season
+   */
+  async getLeagueTeams(seasonId: number, options?: { page?: number; includeStats?: boolean; maxTime?: number }): Promise<ServiceResponse<Team[]>> {
+    const startTime = Date.now();
+    const cacheKey = cacheKeys.leagueTeams(seasonId, options?.page, options?.includeStats, options?.maxTime);
+
+    try {
+      console.log(`👥 Getting league teams for season ID: ${seasonId}`);
+
+      // Validate season ID
+      if (!seasonId || seasonId <= 0 || !Number.isInteger(seasonId)) {
+        return {
+          success: false,
+          error: 'Invalid season ID: must be a positive integer',
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: FOOTY_ENDPOINTS.LEAGUE_TEAMS,
+            processingTime: Date.now() - startTime
+          }
+        };
+      }
+
+      // Check cache first
+      const cachedData = await this.cacheManager.get<Team[]>(cacheKey);
+      if (cachedData) {
+        console.log('✅ League teams retrieved from cache');
+        return {
+          success: true,
+          data: cachedData,
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: FOOTY_ENDPOINTS.LEAGUE_TEAMS,
+            processingTime: Date.now() - startTime,
+            cached: true
+          }
+        };
+      }
+
+      // Fetch from API
+      console.log('🔍 Fetching league teams from API...');
+      const includeStatsParam = options?.includeStats ? "stats" : undefined;
+      const response = await DefaultService.getLeagueTeams(
+        seasonId,
+        API_KEY,
+        options?.page || 1,
+        includeStatsParam,
+        options?.maxTime
+      );
+
+      if (!response?.data) {
+        return {
+          success: false,
+          error: `No teams found for season ID ${seasonId}`,
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: FOOTY_ENDPOINTS.LEAGUE_TEAMS,
+            processingTime: Date.now() - startTime
+          }
+        };
+      }
+
+      const teams = Array.isArray(response.data) ? response.data : [];
+      console.log(`✅ Retrieved ${teams.length} teams for season ${seasonId}`);
+
+      // Cache the data
+      await this.cacheManager.set(cacheKey, teams, {
+        ttl: CACHE_TTL.LEAGUE_TEAMS,
+        tags: ['leagues', 'teams', `season-${seasonId}`]
+      });
+
+      return {
+        success: true,
+        data: teams,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          source: FOOTY_ENDPOINTS.LEAGUE_TEAMS,
+          processingTime: Date.now() - startTime,
+          cached: false
+        }
+      };
+
+    } catch (error) {
+      console.error('❌ Error in getLeagueTeams:', error);
+      return {
+        success: false,
+        error: `Failed to get league teams: ${error instanceof Error ? error.message : String(error)}`,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          source: FOOTY_ENDPOINTS.LEAGUE_TEAMS,
+          processingTime: Date.now() - startTime
+        }
+      };
+    }
+  }
+
+  /**
+   * ⚽ GET LEAGUE PLAYERS
+   * Retrieves players for a specific league season
+   */
+  async getLeaguePlayers(seasonId: number, includeStats?: boolean): Promise<ServiceResponse<any[]>> {
+    const startTime = Date.now();
+    const cacheKey = cacheKeys.leaguePlayers(seasonId, includeStats);
+
+    try {
+      console.log(`⚽ Getting league players for season ID: ${seasonId}`);
+
+      // Validate season ID
+      if (!seasonId || seasonId <= 0 || !Number.isInteger(seasonId)) {
+        return {
+          success: false,
+          error: 'Invalid season ID: must be a positive integer',
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: FOOTY_ENDPOINTS.LEAGUE_PLAYERS,
+            processingTime: Date.now() - startTime
+          }
+        };
+      }
+
+      // Check cache first
+      const cachedData = await this.cacheManager.get<any[]>(cacheKey);
+      if (cachedData) {
+        console.log('✅ League players retrieved from cache');
+        return {
+          success: true,
+          data: cachedData,
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: FOOTY_ENDPOINTS.LEAGUE_PLAYERS,
+            processingTime: Date.now() - startTime,
+            cached: true
+          }
+        };
+      }
+
+      // Fetch from API
+      console.log('🔍 Fetching league players from API...');
+      const includeStatsParam = includeStats ? "stats" : undefined;
+      const response = await DefaultService.getLeaguePlayers(seasonId, API_KEY, includeStatsParam);
+
+      if (!response?.data) {
+        return {
+          success: false,
+          error: `No players found for season ID ${seasonId}`,
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: FOOTY_ENDPOINTS.LEAGUE_PLAYERS,
+            processingTime: Date.now() - startTime
+          }
+        };
+      }
+
+      const players = Array.isArray(response.data) ? response.data : [];
+      console.log(`✅ Retrieved ${players.length} players for season ${seasonId}`);
+
+      // Cache the data
+      await this.cacheManager.set(cacheKey, players, {
+        ttl: CACHE_TTL.LEAGUE_PLAYERS,
+        tags: ['leagues', 'players', `season-${seasonId}`]
+      });
+
+      return {
+        success: true,
+        data: players,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          source: FOOTY_ENDPOINTS.LEAGUE_PLAYERS,
+          processingTime: Date.now() - startTime,
+          cached: false
+        }
+      };
+
+    } catch (error) {
+      console.error('❌ Error in getLeaguePlayers:', error);
+      return {
+        success: false,
+        error: `Failed to get league players: ${error instanceof Error ? error.message : String(error)}`,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          source: FOOTY_ENDPOINTS.LEAGUE_PLAYERS,
+          processingTime: Date.now() - startTime
+        }
+      };
+    }
+  }
+
+  /**
+   * 🏁 GET LEAGUE TABLES
+   * Retrieves league tables for a specific season
+   */
+  async getLeagueTables(seasonId: number): Promise<ServiceResponse<any[]>> {
+    const startTime = Date.now();
+    const cacheKey = cacheKeys.leagueTables(seasonId);
+
+    try {
+      console.log(`🏁 Getting league tables for season ID: ${seasonId}`);
+
+      // Validate season ID
+      if (!seasonId || seasonId <= 0 || !Number.isInteger(seasonId)) {
+        return {
+          success: false,
+          error: 'Invalid season ID: must be a positive integer',
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: FOOTY_ENDPOINTS.LEAGUE_TABLES,
+            processingTime: Date.now() - startTime
+          }
+        };
+      }
+
+      // Check cache first
+      const cachedData = await this.cacheManager.get<any[]>(cacheKey);
+      if (cachedData) {
+        console.log('✅ League tables retrieved from cache');
+        return {
+          success: true,
+          data: cachedData,
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: FOOTY_ENDPOINTS.LEAGUE_TABLES,
+            processingTime: Date.now() - startTime,
+            cached: true
+          }
+        };
+      }
+
+      // Fetch from API
+      console.log('🔍 Fetching league tables from API...');
+      const response = await DefaultService.getLeagueTables(seasonId, API_KEY);
+
+      if (!response?.data) {
+        return {
+          success: false,
+          error: `No tables found for season ID ${seasonId}`,
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: FOOTY_ENDPOINTS.LEAGUE_TABLES,
+            processingTime: Date.now() - startTime
+          }
+        };
+      }
+
+      const tables = Array.isArray(response.data) ? response.data : [];
+      console.log(`✅ Retrieved ${tables.length} table entries for season ${seasonId}`);
+
+      // Cache the data
+      await this.cacheManager.set(cacheKey, tables, {
+        ttl: CACHE_TTL.LEAGUE_TABLES,
+        tags: ['leagues', 'tables', `season-${seasonId}`]
+      });
+
+      return {
+        success: true,
+        data: tables,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          source: FOOTY_ENDPOINTS.LEAGUE_TABLES,
+          processingTime: Date.now() - startTime,
+          cached: false
+        }
+      };
+
+    } catch (error) {
+      console.error('❌ Error in getLeagueTables:', error);
+      return {
+        success: false,
+        error: `Failed to get league tables: ${error instanceof Error ? error.message : String(error)}`,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          source: FOOTY_ENDPOINTS.LEAGUE_TABLES,
+          processingTime: Date.now() - startTime
+        }
+      };
+    }
+  }
+
+  /**
+   * 👨‍⚖️ GET LEAGUE REFEREES
+   * Retrieves referees for a specific league season
+   */
+  async getLeagueReferees(seasonId: number): Promise<ServiceResponse<any[]>> {
+    const startTime = Date.now();
+    const cacheKey = cacheKeys.leagueReferees(seasonId);
+
+    try {
+      console.log(`👨‍⚖️ Getting league referees for season ID: ${seasonId}`);
+
+      // Validate season ID
+      if (!seasonId || seasonId <= 0 || !Number.isInteger(seasonId)) {
+        return {
+          success: false,
+          error: 'Invalid season ID: must be a positive integer',
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: FOOTY_ENDPOINTS.LEAGUE_REFEREES,
+            processingTime: Date.now() - startTime
+          }
+        };
+      }
+
+      // Check cache first
+      const cachedData = await this.cacheManager.get<any[]>(cacheKey);
+      if (cachedData) {
+        console.log('✅ League referees retrieved from cache');
+        return {
+          success: true,
+          data: cachedData,
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: FOOTY_ENDPOINTS.LEAGUE_REFEREES,
+            processingTime: Date.now() - startTime,
+            cached: true
+          }
+        };
+      }
+
+      // Fetch from API
+      console.log('🔍 Fetching league referees from API...');
+      const response = await DefaultService.getLeagueReferees(seasonId, API_KEY);
+
+      if (!response?.data) {
+        return {
+          success: false,
+          error: `No referees found for season ID ${seasonId}`,
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: FOOTY_ENDPOINTS.LEAGUE_REFEREES,
+            processingTime: Date.now() - startTime
+          }
+        };
+      }
+
+      const referees = Array.isArray(response.data) ? response.data : [];
+      console.log(`✅ Retrieved ${referees.length} referees for season ${seasonId}`);
+
+      // Cache the data
+      await this.cacheManager.set(cacheKey, referees, {
+        ttl: CACHE_TTL.LEAGUE_REFEREES,
+        tags: ['leagues', 'referees', `season-${seasonId}`]
+      });
+
+      return {
+        success: true,
+        data: referees,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          source: FOOTY_ENDPOINTS.LEAGUE_REFEREES,
+          processingTime: Date.now() - startTime,
+          cached: false
+        }
+      };
+
+    } catch (error) {
+      console.error('❌ Error in getLeagueReferees:', error);
+      return {
+        success: false,
+        error: `Failed to get league referees: ${error instanceof Error ? error.message : String(error)}`,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          source: FOOTY_ENDPOINTS.LEAGUE_REFEREES,
+          processingTime: Date.now() - startTime
+        }
+      };
+    }
+  }
+
+  /**
+   * 🏟️ GET TEAM
+   * Retrieves detailed team information
+   */
+  async getTeam(teamId: number, includeStats?: boolean): Promise<ServiceResponse<Team>> {
+    const startTime = Date.now();
+    const cacheKey = cacheKeys.team(teamId, includeStats);
+
+    try {
+      console.log(`🏟️ Getting team details for ID: ${teamId}`);
+
+      // Validate team ID
+      if (!teamId || teamId <= 0 || !Number.isInteger(teamId)) {
+        return {
+          success: false,
+          error: 'Invalid team ID: must be a positive integer',
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: FOOTY_ENDPOINTS.TEAM,
+            processingTime: Date.now() - startTime
+          }
+        };
+      }
+
+      // Check cache first
+      const cachedData = await this.cacheManager.get<Team>(cacheKey);
+      if (cachedData) {
+        console.log('✅ Team details retrieved from cache');
+        return {
+          success: true,
+          data: cachedData,
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: FOOTY_ENDPOINTS.TEAM,
+            processingTime: Date.now() - startTime,
+            cached: true
+          }
+        };
+      }
+
+      // Fetch from API
+      console.log('🔍 Fetching team details from API...');
+      const includeStatsParam = includeStats ? "stats" : undefined;
+      const response = await DefaultService.getTeam(teamId, API_KEY, includeStatsParam);
+
+      if (!response?.data) {
+        return {
+          success: false,
+          error: `Team with ID ${teamId} not found`,
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: FOOTY_ENDPOINTS.TEAM,
+            processingTime: Date.now() - startTime
+          }
+        };
+      }
+
+      // Handle API response - might be array or single object
+      const teamData = Array.isArray(response.data) ? response.data[0] : response.data;
+      const team = teamData as unknown as Team;
+      console.log(`✅ Retrieved team details for ID: ${teamId}`);
+
+      // Cache the data
+      await this.cacheManager.set(cacheKey, team, {
+        ttl: CACHE_TTL.TEAM_DATA,
+        tags: ['teams', 'team-details', `team-${teamId}`]
+      });
+
+      return {
+        success: true,
+        data: team,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          source: FOOTY_ENDPOINTS.TEAM,
+          processingTime: Date.now() - startTime,
+          cached: false
+        }
+      };
+
+    } catch (error) {
+      console.error('❌ Error in getTeam:', error);
+      return {
+        success: false,
+        error: `Failed to get team details: ${error instanceof Error ? error.message : String(error)}`,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          source: FOOTY_ENDPOINTS.TEAM,
+          processingTime: Date.now() - startTime
+        }
+      };
+    }
+  }
+
+
+
+  /**
+   * 📊 GET TEAM LAST X STATS
+   * Retrieves team's recent match statistics
+   */
+  async getTeamLastXStats(teamId: number, matchCount?: number): Promise<ServiceResponse<any>> {
+    const startTime = Date.now();
+    const cacheKey = cacheKeys.teamLastXStats(teamId, matchCount);
+
+    try {
+      console.log(`📊 Getting team last X stats for ID: ${teamId}, matches: ${matchCount || 'default'}`);
+
+      // Validate team ID
+      if (!teamId || teamId <= 0 || !Number.isInteger(teamId)) {
+        return {
+          success: false,
+          error: 'Invalid team ID: must be a positive integer',
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: FOOTY_ENDPOINTS.TEAM_LAST_X_STATS,
+            processingTime: Date.now() - startTime
+          }
+        };
+      }
+
+      // Validate match count if provided
+      if (matchCount && (matchCount <= 0 || !Number.isInteger(matchCount))) {
+        return {
+          success: false,
+          error: 'Invalid match count: must be a positive integer',
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: FOOTY_ENDPOINTS.TEAM_LAST_X_STATS,
+            processingTime: Date.now() - startTime
+          }
+        };
+      }
+
+      // Check cache first
+      const cachedData = await this.cacheManager.get<any>(cacheKey);
+      if (cachedData) {
+        console.log('✅ Team last X stats retrieved from cache');
+        return {
+          success: true,
+          data: cachedData,
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: FOOTY_ENDPOINTS.TEAM_LAST_X_STATS,
+            processingTime: Date.now() - startTime,
+            cached: true
+          }
+        };
+      }
+
+      // Fetch from API
+      console.log('🔍 Fetching team last X stats from API...');
+      const response = await DefaultService.getTeamLastXStats(teamId, API_KEY);
+
+      if (!response?.data) {
+        return {
+          success: false,
+          error: `No stats found for team ID ${teamId}`,
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: FOOTY_ENDPOINTS.TEAM_LAST_X_STATS,
+            processingTime: Date.now() - startTime
+          }
+        };
+      }
+
+      const teamStats = response.data;
+      console.log(`✅ Retrieved team last X stats for ID: ${teamId}`);
+
+      // Cache the data
+      await this.cacheManager.set(cacheKey, teamStats, {
+        ttl: CACHE_TTL.TEAM_STATS,
+        tags: ['teams', 'team-stats', `team-${teamId}`]
+      });
+
+      return {
+        success: true,
+        data: teamStats,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          source: FOOTY_ENDPOINTS.TEAM_LAST_X_STATS,
+          processingTime: Date.now() - startTime,
+          cached: false
+        }
+      };
+
+    } catch (error) {
+      console.error('❌ Error in getTeamLastXStats:', error);
+      return {
+        success: false,
+        error: `Failed to get team last X stats: ${error instanceof Error ? error.message : String(error)}`,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          source: FOOTY_ENDPOINTS.TEAM_LAST_X_STATS,
+          processingTime: Date.now() - startTime
+        }
+      };
+    }
+  }
+
+  /**
+   * ⚽ GET PLAYER STATS
+   * Retrieves individual player statistics
+   */
+  async getPlayerStats(playerId: number): Promise<ServiceResponse<any>> {
+    const startTime = Date.now();
+    const cacheKey = cacheKeys.playerStats(playerId);
+
+    try {
+      console.log(`⚽ Getting player stats for ID: ${playerId}`);
+
+      // Validate player ID
+      if (!playerId || playerId <= 0 || !Number.isInteger(playerId)) {
+        return {
+          success: false,
+          error: 'Invalid player ID: must be a positive integer',
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: FOOTY_ENDPOINTS.PLAYER_STATS,
+            processingTime: Date.now() - startTime
+          }
+        };
+      }
+
+      // Check cache first
+      const cachedData = await this.cacheManager.get<any>(cacheKey);
+      if (cachedData) {
+        console.log('✅ Player stats retrieved from cache');
+        return {
+          success: true,
+          data: cachedData,
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: FOOTY_ENDPOINTS.PLAYER_STATS,
+            processingTime: Date.now() - startTime,
+            cached: true
+          }
+        };
+      }
+
+      // Fetch from API
+      console.log('🔍 Fetching player stats from API...');
+      const response = await DefaultService.getPlayerStats(playerId, API_KEY);
+
+      if (!response?.data) {
+        return {
+          success: false,
+          error: `Player with ID ${playerId} not found`,
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: FOOTY_ENDPOINTS.PLAYER_STATS,
+            processingTime: Date.now() - startTime
+          }
+        };
+      }
+
+      const playerStats = response.data;
+      console.log(`✅ Retrieved player stats for ID: ${playerId}`);
+
+      // Cache the data
+      await this.cacheManager.set(cacheKey, playerStats, {
+        ttl: CACHE_TTL.PLAYER_STATS,
+        tags: ['players', 'player-stats', `player-${playerId}`]
+      });
+
+      return {
+        success: true,
+        data: playerStats,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          source: FOOTY_ENDPOINTS.PLAYER_STATS,
+          processingTime: Date.now() - startTime,
+          cached: false
+        }
+      };
+
+    } catch (error) {
+      console.error('❌ Error in getPlayerStats:', error);
+      return {
+        success: false,
+        error: `Failed to get player stats: ${error instanceof Error ? error.message : String(error)}`,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          source: FOOTY_ENDPOINTS.PLAYER_STATS,
+          processingTime: Date.now() - startTime
+        }
+      };
+    }
+  }
+
+  /**
+   * 👨‍⚖️ GET REFEREE STATS
+   * Retrieves individual referee statistics
+   */
+  async getRefereeStats(refereeId: number): Promise<ServiceResponse<any>> {
+    const startTime = Date.now();
+    const cacheKey = cacheKeys.refereeStats(refereeId);
+
+    try {
+      console.log(`👨‍⚖️ Getting referee stats for ID: ${refereeId}`);
+
+      // Validate referee ID
+      if (!refereeId || refereeId <= 0 || !Number.isInteger(refereeId)) {
+        return {
+          success: false,
+          error: 'Invalid referee ID: must be a positive integer',
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: FOOTY_ENDPOINTS.REFEREE_STATS,
+            processingTime: Date.now() - startTime
+          }
+        };
+      }
+
+      // Check cache first
+      const cachedData = await this.cacheManager.get<any>(cacheKey);
+      if (cachedData) {
+        console.log('✅ Referee stats retrieved from cache');
+        return {
+          success: true,
+          data: cachedData,
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: FOOTY_ENDPOINTS.REFEREE_STATS,
+            processingTime: Date.now() - startTime,
+            cached: true
+          }
+        };
+      }
+
+      // Fetch from API
+      console.log('🔍 Fetching referee stats from API...');
+      const response = await DefaultService.getRefereeStats(refereeId, API_KEY);
+
+      if (!response?.data) {
+        return {
+          success: false,
+          error: `Referee with ID ${refereeId} not found`,
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: FOOTY_ENDPOINTS.REFEREE_STATS,
+            processingTime: Date.now() - startTime
+          }
+        };
+      }
+
+      const refereeStats = response.data;
+      console.log(`✅ Retrieved referee stats for ID: ${refereeId}`);
+
+      // Cache the data
+      await this.cacheManager.set(cacheKey, refereeStats, {
+        ttl: CACHE_TTL.REFEREE_STATS,
+        tags: ['referees', 'referee-stats', `referee-${refereeId}`]
+      });
+
+      return {
+        success: true,
+        data: refereeStats,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          source: FOOTY_ENDPOINTS.REFEREE_STATS,
+          processingTime: Date.now() - startTime,
+          cached: false
+        }
+      };
+
+    } catch (error) {
+      console.error('❌ Error in getRefereeStats:', error);
+      return {
+        success: false,
+        error: `Failed to get referee stats: ${error instanceof Error ? error.message : String(error)}`,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          source: FOOTY_ENDPOINTS.REFEREE_STATS,
+          processingTime: Date.now() - startTime
+        }
+      };
+    }
+  }
+
+  /**
+   * 🎯 GET BTTS STATS
+   * Retrieves Both Teams To Score statistics
+   */
+  async getBttsStats(): Promise<ServiceResponse<any>> {
+    const startTime = Date.now();
+    const cacheKey = cacheKeys.bttsStats();
+
+    try {
+      console.log('🎯 Getting BTTS (Both Teams To Score) stats...');
+
+      // Check cache first
+      const cachedData = await this.cacheManager.get<any>(cacheKey);
+      if (cachedData) {
+        console.log('✅ BTTS stats retrieved from cache');
+        return {
+          success: true,
+          data: cachedData,
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: FOOTY_ENDPOINTS.BTTS_STATS,
+            processingTime: Date.now() - startTime,
+            cached: true
+          }
+        };
+      }
+
+      // Fetch from API
+      console.log('🔍 Fetching BTTS stats from API...');
+      const response = await DefaultService.getBttsStats(API_KEY);
+
+      if (!response?.data) {
+        return {
+          success: false,
+          error: 'No BTTS stats data returned from API',
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: FOOTY_ENDPOINTS.BTTS_STATS,
+            processingTime: Date.now() - startTime
+          }
+        };
+      }
+
+      const bttsStats = response.data;
+      console.log('✅ Retrieved BTTS stats from API');
+
+      // Cache the data with shorter TTL for analytics
+      await this.cacheManager.set(cacheKey, bttsStats, {
+        ttl: CACHE_TTL.BTTS_STATS,
+        tags: ['analytics', 'btts', 'statistics']
+      });
+
+      return {
+        success: true,
+        data: bttsStats,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          source: FOOTY_ENDPOINTS.BTTS_STATS,
+          processingTime: Date.now() - startTime,
+          cached: false
+        }
+      };
+
+    } catch (error) {
+      console.error('❌ Error in getBttsStats:', error);
+      return {
+        success: false,
+        error: `Failed to get BTTS stats: ${error instanceof Error ? error.message : String(error)}`,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          source: FOOTY_ENDPOINTS.BTTS_STATS,
+          processingTime: Date.now() - startTime
+        }
+      };
+    }
+  }
+
+  /**
+   * 📈 GET OVER 2.5 STATS
+   * Retrieves Over 2.5 goals statistics
+   */
+  async getOver25Stats(): Promise<ServiceResponse<any>> {
+    const startTime = Date.now();
+    const cacheKey = cacheKeys.over25Stats();
+
+    try {
+      console.log('📈 Getting Over 2.5 goals stats...');
+
+      // Check cache first
+      const cachedData = await this.cacheManager.get<any>(cacheKey);
+      if (cachedData) {
+        console.log('✅ Over 2.5 stats retrieved from cache');
+        return {
+          success: true,
+          data: cachedData,
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: FOOTY_ENDPOINTS.OVER25_STATS,
+            processingTime: Date.now() - startTime,
+            cached: true
+          }
+        };
+      }
+
+      // Fetch from API
+      console.log('🔍 Fetching Over 2.5 stats from API...');
+      const response = await DefaultService.getOver25Stats(API_KEY);
+
+      if (!response?.data) {
+        return {
+          success: false,
+          error: 'No Over 2.5 stats data returned from API',
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: FOOTY_ENDPOINTS.OVER25_STATS,
+            processingTime: Date.now() - startTime
+          }
+        };
+      }
+
+      const over25Stats = response.data;
+      console.log('✅ Retrieved Over 2.5 stats from API');
+
+      // Cache the data with shorter TTL for analytics
+      await this.cacheManager.set(cacheKey, over25Stats, {
+        ttl: CACHE_TTL.OVER25_STATS,
+        tags: ['analytics', 'over25', 'statistics']
+      });
+
+      return {
+        success: true,
+        data: over25Stats,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          source: FOOTY_ENDPOINTS.OVER25_STATS,
+          processingTime: Date.now() - startTime,
+          cached: false
+        }
+      };
+
+    } catch (error) {
+      console.error('❌ Error in getOver25Stats:', error);
+      return {
+        success: false,
+        error: `Failed to get Over 2.5 stats: ${error instanceof Error ? error.message : String(error)}`,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          source: FOOTY_ENDPOINTS.OVER25_STATS,
+          processingTime: Date.now() - startTime
+        }
+      };
+    }
+  }
+
+  /**
+   * 🧹 CLEANUP
+   * Shutdown the service and cleanup resources
+   */
+  async shutdown(): Promise<void> {
+    console.log('🧹 Shutting down FootyStatsService...');
+    this.cacheManager.shutdown();
+    console.log('✅ FootyStatsService shutdown complete');
   }
 }

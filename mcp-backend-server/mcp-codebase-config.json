@@ -1,0 +1,229 @@
+{
+  "name": "codebase-memory-intelligence-server",
+  "version": "1.0.0",
+  "description": "MCP Server for comprehensive codebase memory and intelligence",
+  "server": {
+    "command": "node",
+    "args": ["dist/mcp-codebase-memory-server.js"],
+    "env": {
+      "NODE_ENV": "production"
+    }
+  },
+  "analysis": {
+    "defaultDepth": "deep",
+    "includeTests": true,
+    "includeNodeModules": false,
+    "focusAreas": [
+      "structure",
+      "patterns",
+      "dependencies",
+      "performance",
+      "security"
+    ],
+    "memoryRetention": "30d",
+    "autoCleanup": true
+  },
+  "patterns": {
+    "enabled": [
+      "mvc",
+      "service-layer",
+      "repository",
+      "dto",
+      "api-client",
+      "error-handling",
+      "testing"
+    ],
+    "strictMode": false,
+    "customPatterns": []
+  },
+  "codeGeneration": {
+    "followExistingPatterns": true,
+    "includeTests": true,
+    "includeDocumentation": true,
+    "styleConsistency": true,
+    "templates": {
+      "controller": "templates/controller.template.ts",
+      "service": "templates/service.template.ts",
+      "model": "templates/model.template.ts",
+      "test": "templates/test.template.ts"
+    }
+  },
+  "dependencies": {
+    "scanUnused": true,
+    "checkSecurity": true,
+    "analyzeBundleSize": true,
+    "suggestAlternatives": true,
+    "autoUpdate": false,
+    "excludePatterns": [
+      "@types/*",
+      "eslint*",
+      "prettier"
+    ]
+  },
+  "technicalDebt": {
+    "trackingEnabled": true,
+    "categories": [
+      "code-smells",
+      "security",
+      "performance",
+      "maintainability",
+      "documentation",
+      "testing"
+    ],
+    "severityThreshold": "medium",
+    "reportingInterval": "weekly"
+  },
+  "memory": {
+    "storageLocation": ".mcp-memory",
+    "maxEntries": 10000,
+    "retentionPeriod": "90d",
+    "compressionEnabled": true,
+    "backupEnabled": true,
+    "backupInterval": "daily"
+  },
+  "monitoring": {
+    "fileWatching": true,
+    "realTimeAnalysis": false,
+    "performanceTracking": true,
+    "errorReporting": true,
+    "metricsCollection": true
+  },
+  "integration": {
+    "footyStatsAPI": {
+      "enabled": true,
+      "specPath": "../footy.yaml",
+      "clientPath": "src/apis/footy"
+    },
+    "openAPI": {
+      "enabled": true,
+      "specPaths": [
+        "footy.yaml",
+        "api-spec.yaml"
+      ]
+    },
+    "testing": {
+      "framework": "jest",
+      "configPath": "jest.config.js",
+      "coverageThreshold": 80
+    },
+    "linting": {
+      "enabled": true,
+      "configPath": ".eslintrc.js",
+      "autoFix": false
+    }
+  },
+  "recommendations": {
+    "enabled": true,
+    "contextAware": true,
+    "learningEnabled": true,
+    "priorityFiltering": true,
+    "categories": [
+      "refactoring",
+      "patterns",
+      "optimization",
+      "security",
+      "testing",
+      "documentation"
+    ]
+  },
+  "reporting": {
+    "generateReports": true,
+    "reportFormats": ["markdown", "json"],
+    "outputDirectory": "reports",
+    "includeMetrics": true,
+    "includeTrends": true,
+    "includeRecommendations": true
+  },
+  "security": {
+    "vulnerabilityScanning": true,
+    "secretDetection": true,
+    "dependencyAudit": true,
+    "codeAnalysis": true,
+    "reportingLevel": "high"
+  },
+  "performance": {
+    "analysisTimeout": 300000,
+    "maxConcurrentAnalysis": 3,
+    "cacheEnabled": true,
+    "cacheTTL": 3600,
+    "memoryLimit": "512MB"
+  },
+  "logging": {
+    "level": "info",
+    "format": "json",
+    "destination": "logs/mcp-codebase.log",
+    "rotation": "daily",
+    "maxFiles": 7
+  },
+  "tools": {
+    "analyze_codebase_structure": {
+      "enabled": true,
+      "timeout": 120000,
+      "maxDepth": "comprehensive"
+    },
+    "get_related_files": {
+      "enabled": true,
+      "maxResults": 50,
+      "relationshipTypes": [
+        "imports",
+        "exports",
+        "tests",
+        "similar",
+        "dependent"
+      ]
+    },
+    "suggest_refactoring_opportunities": {
+      "enabled": true,
+      "types": [
+        "extract-function",
+        "extract-class",
+        "remove-duplication",
+        "optimize-imports",
+        "improve-naming",
+        "reduce-complexity"
+      ],
+      "priorityThreshold": "medium"
+    },
+    "validate_coding_patterns": {
+      "enabled": true,
+      "strictMode": false,
+      "generateReport": true
+    },
+    "generate_context_aware_code": {
+      "enabled": true,
+      "followPatterns": true,
+      "includeTests": true,
+      "includeDocumentation": true
+    },
+    "track_technical_debt": {
+      "enabled": true,
+      "includeMetrics": true,
+      "categories": [
+        "code-smells",
+        "security",
+        "performance",
+        "maintainability",
+        "documentation",
+        "testing"
+      ]
+    },
+    "optimize_dependencies": {
+      "enabled": true,
+      "includeDevDependencies": true,
+      "suggestAlternatives": true,
+      "analysisTypes": [
+        "unused",
+        "outdated",
+        "security",
+        "bundle-size",
+        "conflicts"
+      ]
+    }
+  },
+  "experimental": {
+    "aiAssisted": false,
+    "predictiveAnalysis": false,
+    "autoRefactoring": false,
+    "smartSuggestions": true
+  }
+}

@@ -1,7 +1,9 @@
 openapi: 3.1.0
 info:
   title: Football Data API
-  description: Comprehensive football data API providing leagues, matches, teams, players, and statistics
+  description:
+    Comprehensive football data API providing leagues, matches, teams,
+    players, and statistics
   version: 1.0.0
   contact:
     name: Football Data API
@@ -9,10 +11,8 @@ info:
 servers:
   - url: https://api.football-data-api.com
     description: Production server
-
 security:
   - ApiKeyAuth: []
-
 parameters:
   ApiKey:
     name: key
@@ -21,8 +21,7 @@ parameters:
     required: true
     schema:
       type: string
-      default: "4fd202fbc338fbd450e91761c7b83641606b2a4da37dd1a7d29b4cd1d4de9756"
-
+      default: 4fd202fbc338fbd450e91761c7b83641606b2a4da37dd1a7d29b4cd1d4de9756
 components:
   securitySchemes:
     ApiKeyAuth:
@@ -30,7 +29,6 @@ components:
       in: query
       name: key
       description: Your API key
-
   schemas:
     ApiResponse:
       type: object
@@ -45,15 +43,13 @@ components:
       required:
         - success
         - data
-
     PaginatedResponse:
       allOf:
-        - $ref: '#/components/schemas/ApiResponse'
+        - $ref: "#/components/schemas/ApiResponse"
         - type: object
           properties:
             pager:
-              $ref: '#/components/schemas/Pager'
-
+              $ref: "#/components/schemas/Pager"
     Pager:
       type: object
       properties:
@@ -74,7 +70,6 @@ components:
         - max_page
         - results_per_page
         - total_results
-
     League:
       type: object
       properties:
@@ -84,12 +79,11 @@ components:
         season:
           type: array
           items:
-            $ref: '#/components/schemas/Season'
+            $ref: "#/components/schemas/Season"
           description: Array of seasons for this league
       required:
         - name
         - season
-
     Season:
       type: object
       properties:
@@ -102,7 +96,6 @@ components:
       required:
         - id
         - year
-
     Country:
       type: object
       properties:
@@ -115,7 +108,6 @@ components:
       required:
         - id
         - name
-
     Match:
       type: object
       properties:
@@ -133,7 +125,11 @@ components:
           description: Season year of the league
         status:
           type: string
-          enum: [complete, suspended, canceled, incomplete]
+          enum:
+            - complete
+            - suspended
+            - canceled
+            - incomplete
           description: Status of the match
         roundID:
           type: integer
@@ -286,7 +282,6 @@ components:
         - awayID
         - season
         - status
-
     Team:
       type: object
       properties:
@@ -363,7 +358,6 @@ components:
       required:
         - id
         - name
-
     Player:
       type: object
       properties:
@@ -391,7 +385,6 @@ components:
       required:
         - id
         - name
-
     Referee:
       type: object
       properties:
@@ -410,7 +403,6 @@ components:
       required:
         - id
         - name
-
     LeagueSeason:
       type: object
       properties:
@@ -486,7 +478,6 @@ components:
       required:
         - id
         - name
-
 paths:
   /league-list:
     get:
@@ -494,14 +485,16 @@ paths:
       description: Returns a JSON array of all leagues available in the API Database
       operationId: getLeagues
       parameters:
-        - $ref: '#/parameters/ApiKey'
+        - $ref: "#/parameters/ApiKey"
         - name: chosen_leagues_only
           in: query
           description: If set to "true", only return user-chosen leagues
           required: false
           schema:
             type: string
-            enum: ["true", "false"]
+            enum:
+              - "true"
+              - "false"
         - name: country
           in: query
           description: ISO number of the country to filter leagues
@@ -509,49 +502,47 @@ paths:
           schema:
             type: integer
       responses:
-        '200':
+        "200":
           description: Successfully retrieved all leagues
           content:
             application/json:
               schema:
                 allOf:
-                  - $ref: '#/components/schemas/ApiResponse'
+                  - $ref: "#/components/schemas/ApiResponse"
                   - type: object
                     properties:
                       data:
                         type: array
                         items:
-                          $ref: '#/components/schemas/League'
-
+                          $ref: "#/components/schemas/League"
   /country-list:
     get:
       summary: Get Countries
       description: Returns a JSON array of Countries and their ISO numbers
       operationId: getCountries
       parameters:
-        - $ref: '#/parameters/ApiKey'
+        - $ref: "#/parameters/ApiKey"
       responses:
-        '200':
+        "200":
           description: Successfully retrieved all countries
           content:
             application/json:
               schema:
                 allOf:
-                  - $ref: '#/components/schemas/ApiResponse'
+                  - $ref: "#/components/schemas/ApiResponse"
                   - type: object
                     properties:
                       data:
                         type: array
                         items:
-                          $ref: '#/components/schemas/Country'
-
+                          $ref: "#/components/schemas/Country"
   /todays-matches:
     get:
       summary: Get Today's Matches
       description: Get a list of today's matches with or without stats
       operationId: getTodaysMatches
       parameters:
-        - $ref: '#/parameters/ApiKey'
+        - $ref: "#/parameters/ApiKey"
         - name: timezone
           in: query
           description: Timezone (e.g., Europe/London). Defaults to Etc/UTC
@@ -574,27 +565,26 @@ paths:
             minimum: 1
             default: 1
       responses:
-        '200':
+        "200":
           description: Successfully retrieved matches
           content:
             application/json:
               schema:
                 allOf:
-                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - $ref: "#/components/schemas/PaginatedResponse"
                   - type: object
                     properties:
                       data:
                         type: array
                         items:
-                          $ref: '#/components/schemas/Match'
-
+                          $ref: "#/components/schemas/Match"
   /league-season:
     get:
       summary: Get Season Stats and Teams
       description: Get league season stats and teams that participated
       operationId: getLeagueSeason
       parameters:
-        - $ref: '#/parameters/ApiKey'
+        - $ref: "#/parameters/ApiKey"
         - name: season_id
           in: query
           description: ID of the league season to retrieve
@@ -608,20 +598,19 @@ paths:
           schema:
             type: integer
       responses:
-        '200':
+        "200":
           description: Successfully retrieved league season data
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiResponse'
-
+                $ref: "#/components/schemas/ApiResponse"
   /league-matches:
     get:
       summary: Get League Matches
       description: Get full match schedule of the selected league season
       operationId: getLeagueMatches
       parameters:
-        - $ref: '#/parameters/ApiKey'
+        - $ref: "#/parameters/ApiKey"
         - name: season_id
           in: query
           description: ID of the league season to retrieve
@@ -652,27 +641,26 @@ paths:
           schema:
             type: integer
       responses:
-        '200':
+        "200":
           description: Successfully retrieved league matches
           content:
             application/json:
               schema:
                 allOf:
-                  - $ref: '#/components/schemas/ApiResponse'
+                  - $ref: "#/components/schemas/ApiResponse"
                   - type: object
                     properties:
                       data:
                         type: array
                         items:
-                          $ref: '#/components/schemas/Match'
-
+                          $ref: "#/components/schemas/Match"
   /league-teams:
     get:
       summary: Get Teams in a League Season
       description: Get all teams that participated in a season of a league
       operationId: getLeagueTeams
       parameters:
-        - $ref: '#/parameters/ApiKey'
+        - $ref: "#/parameters/ApiKey"
         - name: season_id
           in: query
           description: ID of the league season to retrieve
@@ -693,7 +681,8 @@ paths:
           required: false
           schema:
             type: string
-            enum: ["stats"]
+            enum:
+              - stats
         - name: max_time
           in: query
           description: UNIX timestamp to get stats up to a certain time
@@ -701,20 +690,19 @@ paths:
           schema:
             type: integer
       responses:
-        '200':
+        "200":
           description: Successfully retrieved league teams
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedResponse'
-
+                $ref: "#/components/schemas/PaginatedResponse"
   /league-players:
     get:
       summary: Get League Players
       description: Get all players that participated in a season of a league
       operationId: getLeaguePlayers
       parameters:
-        - $ref: '#/parameters/ApiKey'
+        - $ref: "#/parameters/ApiKey"
         - name: season_id
           in: query
           description: ID of the league season to retrieve
@@ -727,22 +715,22 @@ paths:
           required: false
           schema:
             type: string
-            enum: ["stats"]
+            enum:
+              - stats
       responses:
-        '200':
+        "200":
           description: Successfully retrieved league players
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiResponse'
-
+                $ref: "#/components/schemas/ApiResponse"
   /league-referees:
     get:
       summary: Get League Referees
       description: Get all referees that officiated in a season of a league
       operationId: getLeagueReferees
       parameters:
-        - $ref: '#/parameters/ApiKey'
+        - $ref: "#/parameters/ApiKey"
         - name: season_id
           in: query
           description: ID of the league season to retrieve
@@ -750,20 +738,19 @@ paths:
           schema:
             type: integer
       responses:
-        '200':
+        "200":
           description: Successfully retrieved league referees
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiResponse'
-
+                $ref: "#/components/schemas/ApiResponse"
   /team:
     get:
       summary: Get Individual Team Data
       description: Get data for an individual team
       operationId: getTeam
       parameters:
-        - $ref: '#/parameters/ApiKey'
+        - $ref: "#/parameters/ApiKey"
         - name: team_id
           in: query
           description: ID of the team to retrieve
@@ -776,22 +763,22 @@ paths:
           required: false
           schema:
             type: string
-            enum: ["stats"]
+            enum:
+              - stats
       responses:
-        '200':
+        "200":
           description: Successfully retrieved team data
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiResponse'
-
+                $ref: "#/components/schemas/ApiResponse"
   /lastx:
     get:
       summary: Get Last X Stats for a Team
       description: Get last 5, 6, or 10 match stats for an individual team
       operationId: getTeamLastXStats
       parameters:
-        - $ref: '#/parameters/ApiKey'
+        - $ref: "#/parameters/ApiKey"
         - name: team_id
           in: query
           description: ID of the team to retrieve stats for
@@ -799,20 +786,19 @@ paths:
           schema:
             type: integer
       responses:
-        '200':
+        "200":
           description: Successfully retrieved team last X stats
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiResponse'
-
+                $ref: "#/components/schemas/ApiResponse"
   /match:
     get:
       summary: Get Match Details
       description: Get detailed stats, H2H data, and odds comparison for a single match
       operationId: getMatch
       parameters:
-        - $ref: '#/parameters/ApiKey'
+        - $ref: "#/parameters/ApiKey"
         - name: match_id
           in: query
           description: ID of the match to retrieve
@@ -820,20 +806,19 @@ paths:
           schema:
             type: integer
       responses:
-        '200':
+        "200":
           description: Successfully retrieved match details
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiResponse'
-
+                $ref: "#/components/schemas/ApiResponse"
   /league-tables:
     get:
       summary: Get League Tables
       description: Get all tables for a league season
       operationId: getLeagueTables
       parameters:
-        - $ref: '#/parameters/ApiKey'
+        - $ref: "#/parameters/ApiKey"
         - name: season_id
           in: query
           description: ID of the league season to retrieve tables for
@@ -841,20 +826,19 @@ paths:
           schema:
             type: integer
       responses:
-        '200':
+        "200":
           description: Successfully retrieved league tables
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiResponse'
-
+                $ref: "#/components/schemas/ApiResponse"
   /player-stats:
     get:
       summary: Get Individual Player Stats
       description: Get stats for an individual player across all seasons and leagues
       operationId: getPlayerStats
       parameters:
-        - $ref: '#/parameters/ApiKey'
+        - $ref: "#/parameters/ApiKey"
         - name: player_id
           in: query
           description: ID of the player to retrieve stats for
@@ -862,20 +846,19 @@ paths:
           schema:
             type: integer
       responses:
-        '200':
+        "200":
           description: Successfully retrieved player stats
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiResponse'
-
+                $ref: "#/components/schemas/ApiResponse"
   /referee:
     get:
       summary: Get Individual Referee Stats
       description: Get stats for an individual referee across all competitions and seasons
       operationId: getRefereeStats
       parameters:
-        - $ref: '#/parameters/ApiKey'
+        - $ref: "#/parameters/ApiKey"
         - name: referee_id
           in: query
           description: ID of the referee to retrieve stats for
@@ -883,39 +866,37 @@ paths:
           schema:
             type: integer
       responses:
-        '200':
+        "200":
           description: Successfully retrieved referee stats
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiResponse'
-
+                $ref: "#/components/schemas/ApiResponse"
   /stats-data-btts:
     get:
       summary: Get BTTS Stats
       description: Get top teams, fixtures, and leagues for Both Teams To Score (BTTS)
       operationId: getBTTSStats
       parameters:
-        - $ref: '#/parameters/ApiKey'
+        - $ref: "#/parameters/ApiKey"
       responses:
-        '200':
+        "200":
           description: Successfully retrieved BTTS stats
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiResponse'
-
+                $ref: "#/components/schemas/ApiResponse"
   /stats-data-over25:
     get:
       summary: Get Over 2.5 Stats
       description: Get top teams, fixtures, and leagues for Over 2.5 Goals
       operationId: getOver25Stats
       parameters:
-        - $ref: '#/parameters/ApiKey'
+        - $ref: "#/parameters/ApiKey"
       responses:
-        '200':
+        "200":
           description: Successfully retrieved Over 2.5 stats
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiResponse'
+                $ref: "#/components/schemas/ApiResponse"
