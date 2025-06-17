@@ -195,11 +195,21 @@ router.get('/dashboard', cacheMiddleware(300), async (req, res) => {
              timeDiff <= 14400; // 4 hours max for live matches
     });
 
-    // ✅ FIXED: Calculate REAL upcoming matches in next 24h
+    // ✅ FIXED: Calculate REAL upcoming matches in next 24h with detailed logging
+    let upcomingCount = 0;
     const allUpcomingMatches = allMatches.filter(match => {
       const matchTime = match.date_unix || 0;
       const timeDiff = matchTime - currentTime;
-      return timeDiff > 0 && timeDiff <= (24 * 60 * 60); // Next 24 hours only
+      const isUpcoming = timeDiff > 0 && timeDiff <= (24 * 60 * 60); // Next 24 hours only
+
+      // Debug logging for first few upcoming matches
+      if (isUpcoming && upcomingCount < 5) {
+        const matchDate = new Date(matchTime * 1000);
+        logger.debug(`🔍 Upcoming match found: ${match.home_name} vs ${match.away_name} at ${matchDate.toISOString()}`);
+        upcomingCount++;
+      }
+
+      return isUpcoming;
     });
 
     // ✅ Dashboard display: Limit to 6 for layout purposes
@@ -319,98 +329,93 @@ router.get('/live/all', cacheMiddleware(60), async (req, res) => {
  */
 router.get('/upcoming/all', cacheMiddleware(300), async (req, res) => {
   try {
-    logger.info('⏰ Getting ALL upcoming matches (next 24h)');
+    logger.info('⏰ Getting ALL upcoming matches (next 24h) - COMPREHENSIVE FETCH');
     const currentTime = Math.floor(Date.now() / 1000);
-    const today = new Date().toISOString().split('T')[0];
-    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-    // Get both today's and tomorrow's matches
-    const [todayResponse, tomorrowResponse] = await Promise.all([
-      (async () => {
+    // Generate dates for next 3 days to ensure we capture all matches in next 24h
+    const dates = [];
+    for (let i = 0; i < 3; i++) {
+      const date = new Date(Date.now() + i * 24 * 60 * 60 * 1000);
+      dates.push(date.toISOString().split('T')[0]);
+    }
+
+    logger.info(`📅 Fetching matches for dates: ${dates.join(', ')}`);
+
+    // Fetch matches for all dates in parallel with comprehensive pagination
+    const allDateResponses = await Promise.all(
+      dates.map(async (date) => {
         let allMatches: any[] = [];
         let currentPage = 1;
         let hasMorePages = true;
+        const MAX_PAGES = 20; // Increased from 10 to get more matches
 
-        while (hasMorePages && allMatches.length < 500) {
+        while (hasMorePages && currentPage <= MAX_PAGES) {
           try {
+            logger.info(`📄 Fetching ${date} page ${currentPage}`);
             const pageResponse = await DefaultService.getTodaysMatches({
               key: process.env.FOOTYSTATS_API_KEY!,
-              timezone: undefined,
-              date: today,
+              timezone: 'Etc/UTC', // Explicitly set UTC timezone
+              date: date,
               page: currentPage
             });
 
             if (pageResponse?.data && Array.isArray(pageResponse.data)) {
               allMatches.push(...pageResponse.data);
+              logger.info(`📊 ${date} page ${currentPage}: ${pageResponse.data.length} matches (total: ${allMatches.length})`);
 
+              // Check if there are more pages
               if (pageResponse.pager && currentPage < (pageResponse.pager.max_page || 1)) {
                 currentPage++;
               } else {
                 hasMorePages = false;
+                logger.info(`✅ ${date}: Completed all ${currentPage} pages`);
               }
             } else {
               hasMorePages = false;
+              logger.warn(`⚠️ ${date} page ${currentPage}: No data received`);
             }
-
-            if (currentPage > 10) break;
           } catch (error) {
+            logger.error(`❌ Error fetching ${date} page ${currentPage}:`, error);
             hasMorePages = false;
           }
         }
+
+        logger.info(`📈 ${date}: Total ${allMatches.length} matches fetched`);
         return allMatches;
-      })(),
-      (async () => {
-        let allMatches: any[] = [];
-        let currentPage = 1;
-        let hasMorePages = true;
+      })
+    );
 
-        while (hasMorePages && allMatches.length < 500) {
-          try {
-            const pageResponse = await DefaultService.getTodaysMatches({
-              key: process.env.FOOTYSTATS_API_KEY!,
-              timezone: undefined,
-              date: tomorrow,
-              page: currentPage
-            });
+    // Combine all matches from all dates
+    const allMatches = allDateResponses.flat();
+    logger.info(`🔄 Combined total: ${allMatches.length} matches from ${dates.length} dates`);
 
-            if (pageResponse?.data && Array.isArray(pageResponse.data)) {
-              allMatches.push(...pageResponse.data);
-
-              if (pageResponse.pager && currentPage < (pageResponse.pager.max_page || 1)) {
-                currentPage++;
-              } else {
-                hasMorePages = false;
-              }
-            } else {
-              hasMorePages = false;
-            }
-
-            if (currentPage > 10) break;
-          } catch (error) {
-            hasMorePages = false;
-          }
-        }
-        return allMatches;
-      })()
-    ]);
-
-    const allMatches = [...todayResponse, ...tomorrowResponse];
-
-    // Filter for upcoming matches in next 24 hours
+    // Filter for upcoming matches in next 24 hours with detailed logging
     const allUpcomingMatches = allMatches.filter(match => {
       const matchTime = match.date_unix || 0;
       const timeDiff = matchTime - currentTime;
-      return timeDiff > 0 && timeDiff <= (24 * 60 * 60); // Next 24 hours only
+      const isUpcoming = timeDiff > 0 && timeDiff <= (24 * 60 * 60); // Next 24 hours only
+
+      if (isUpcoming) {
+        const matchDate = new Date(matchTime * 1000);
+        logger.debug(`✅ Upcoming: ${match.home_name} vs ${match.away_name} at ${matchDate.toISOString()}`);
+      }
+
+      return isUpcoming;
     });
 
-    logger.info(`⏰ Found ${allUpcomingMatches.length} upcoming matches (24h) out of ${allMatches.length} total matches`);
+    logger.info(`⏰ FINAL RESULT: ${allUpcomingMatches.length} upcoming matches (24h) out of ${allMatches.length} total matches`);
 
     res.json({
       success: true,
       data: {
         matches: allUpcomingMatches,
         totalCount: allUpcomingMatches.length,
-        totalMatches: allMatches.length
+        totalMatches: allMatches.length,
+        datesFetched: dates,
+        breakdown: dates.map((date, index) => ({
+          date,
+          totalMatches: allDateResponses[index].length
+        }))
       },
       timestamp: new Date().toISOString()
     });
