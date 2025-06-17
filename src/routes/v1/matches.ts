@@ -13,6 +13,7 @@
  */
 
 import { Router } from 'express';
+import { DefaultService } from '../../apis/footy';
 import { MatchController } from '../../controllers/MatchController';
 import { cacheMiddleware } from '../../middleware/cache';
 import { rateLimiter } from '../../middleware/rateLimiter';
@@ -117,20 +118,53 @@ router.get('/dashboard', cacheMiddleware(300), async (req, res) => {
 
     const { matchAnalysisService } = await import('../../services/MatchAnalysisService');
 
-    // ✅ FIXED: Use the working today endpoint approach
+    // ✅ FIXED: Use complete pagination like the working methods
     const currentTime = Math.floor(Date.now() / 1000);
     const today = new Date().toISOString().split('T')[0];
 
-    // Use the working getTodaysMatches method (not the optimized one that returns 0)
-    const todaysMatches = await matchAnalysisService.getTodaysMatches(today);
+    // Get ALL today's matches with complete pagination (like getLiveMatches does)
+    let allTodayMatches: any[] = [];
+    let currentPage = 1;
+    let hasMorePages = true;
+    const MAX_MATCHES = 500; // Reasonable limit
 
-    // Combine today's and tomorrow's matches
-    const todayMatches = Array.isArray(todaysMatches?.data) ? todaysMatches.data : [];
-    const tomorrowMatches = Array.isArray(tomorrowsMatches?.data) ? tomorrowsMatches.data : [];
-    const allMatches = [...todayMatches, ...tomorrowMatches];
+    while (hasMorePages && allTodayMatches.length < MAX_MATCHES) {
+      try {
+        const pageResponse = await DefaultService.getTodaysMatches({
+          key: process.env.FOOTYSTATS_API_KEY!,
+          timezone: undefined,
+          date: today,
+          page: currentPage
+        });
+
+        if (pageResponse?.data && Array.isArray(pageResponse.data)) {
+          allTodayMatches.push(...pageResponse.data);
+
+          // Check if there are more pages
+          if (pageResponse.pager && currentPage < (pageResponse.pager.max_page || 1)) {
+            currentPage++;
+          } else {
+            hasMorePages = false;
+          }
+        } else {
+          hasMorePages = false;
+        }
+
+        // Safety check
+        if (currentPage > 10) break;
+      } catch (error) {
+        logger.warn(`⚠️ Error fetching page ${currentPage}:`, error);
+        hasMorePages = false;
+      }
+    }
+
+    logger.info(`📊 Fetched ${allTodayMatches.length} matches for ${today} across ${currentPage} pages`);
+
+    // Use the fetched matches
+    const allMatches = allTodayMatches;
 
     if (allMatches.length === 0) {
-      logger.warn('⚠️ No matches data available for today or tomorrow');
+      logger.warn('⚠️ No matches data available for today');
       return res.json({
         success: true,
         data: {
@@ -172,7 +206,7 @@ router.get('/dashboard', cacheMiddleware(300), async (req, res) => {
       liveMatches,
       upcomingMatches,
       stats: {
-        totalMatches: todaysMatches?.pager?.total_results || allMatches.length,
+        totalMatches: allMatches.length,
         liveMatches: liveMatches.length,
         upcomingMatches: upcomingMatches.length
       }
