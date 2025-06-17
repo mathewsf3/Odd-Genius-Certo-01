@@ -179,8 +179,8 @@ router.get('/dashboard', cacheMiddleware(300), async (req, res) => {
       });
     }
 
-    // ✅ FIXED: Proper live match detection for June 16, 2025
-    const liveMatches = allMatches.filter(match => {
+    // ✅ FIXED: Calculate REAL totals first, then limit for display
+    const allLiveMatches = allMatches.filter(match => {
       const status = match.status?.toLowerCase() || '';
       const matchTime = match.date_unix || 0;
       const timeDiff = currentTime - matchTime;
@@ -193,26 +193,30 @@ router.get('/dashboard', cacheMiddleware(300), async (req, res) => {
              matchTime <= currentTime &&
              timeDiff >= 0 &&
              timeDiff <= 14400; // 4 hours max for live matches
-    }).slice(0, 6);
+    });
 
-    // ✅ FIXED: Upcoming matches are future matches (within next 48 hours)
-    const upcomingMatches = allMatches.filter(match => {
+    // ✅ FIXED: Calculate REAL upcoming matches in next 24h
+    const allUpcomingMatches = allMatches.filter(match => {
       const matchTime = match.date_unix || 0;
       const timeDiff = matchTime - currentTime;
-      return timeDiff > 0 && timeDiff <= (48 * 60 * 60); // Next 48 hours
-    }).slice(0, 6);
+      return timeDiff > 0 && timeDiff <= (24 * 60 * 60); // Next 24 hours only
+    });
+
+    // ✅ Dashboard display: Limit to 6 for layout purposes
+    const liveMatches = allLiveMatches.slice(0, 6);
+    const upcomingMatches = allUpcomingMatches.slice(0, 6);
 
     const dashboardData = {
       liveMatches,
       upcomingMatches,
       stats: {
         totalMatches: allMatches.length,
-        liveMatches: liveMatches.length,
-        upcomingMatches: upcomingMatches.length
+        liveMatches: allLiveMatches.length,        // REAL total live matches
+        upcomingMatches: allUpcomingMatches.length // REAL total upcoming matches (24h)
       }
     };
 
-    logger.info(`📊 Dashboard data: ${liveMatches.length} live, ${upcomingMatches.length} upcoming from single API call`);
+    logger.info(`📊 Dashboard data: ${allLiveMatches.length} total live, ${allUpcomingMatches.length} total upcoming (24h), showing ${liveMatches.length}/${upcomingMatches.length} on dashboard`);
     res.json({
       success: true,
       data: dashboardData,
@@ -224,6 +228,198 @@ router.get('/dashboard', cacheMiddleware(300), async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to get dashboard data',
+      details: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
+ * GET /api/v1/matches/live/all
+ * Get ALL live matches (not limited to 6)
+ * Cache: 1 minute (live data changes frequently)
+ */
+router.get('/live/all', cacheMiddleware(60), async (req, res) => {
+  try {
+    logger.info('🔴 Getting ALL live matches');
+    const currentTime = Math.floor(Date.now() / 1000);
+    const today = new Date().toISOString().split('T')[0];
+
+    // Get ALL today's matches with complete pagination
+    let allTodayMatches: any[] = [];
+    let currentPage = 1;
+    let hasMorePages = true;
+    const MAX_MATCHES = 500;
+
+    while (hasMorePages && allTodayMatches.length < MAX_MATCHES) {
+      try {
+        const pageResponse = await DefaultService.getTodaysMatches({
+          key: process.env.FOOTYSTATS_API_KEY!,
+          timezone: undefined,
+          date: today,
+          page: currentPage
+        });
+
+        if (pageResponse?.data && Array.isArray(pageResponse.data)) {
+          allTodayMatches.push(...pageResponse.data);
+
+          if (pageResponse.pager && currentPage < (pageResponse.pager.max_page || 1)) {
+            currentPage++;
+          } else {
+            hasMorePages = false;
+          }
+        } else {
+          hasMorePages = false;
+        }
+
+        if (currentPage > 10) break;
+      } catch (error) {
+        logger.warn(`⚠️ Error fetching page ${currentPage}:`, error);
+        hasMorePages = false;
+      }
+    }
+
+    // Filter for ALL live matches
+    const allLiveMatches = allTodayMatches.filter(match => {
+      const status = match.status?.toLowerCase() || '';
+      const matchTime = match.date_unix || 0;
+      const timeDiff = currentTime - matchTime;
+
+      return status === 'incomplete' &&
+             matchTime <= currentTime &&
+             timeDiff >= 0 &&
+             timeDiff <= 14400; // 4 hours max for live matches
+    });
+
+    logger.info(`🔴 Found ${allLiveMatches.length} live matches out of ${allTodayMatches.length} total matches`);
+
+    res.json({
+      success: true,
+      data: {
+        matches: allLiveMatches,
+        totalCount: allLiveMatches.length,
+        totalMatchesToday: allTodayMatches.length
+      },
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    logger.error('❌ Error getting all live matches:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get live matches',
+      details: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
+ * GET /api/v1/matches/upcoming/all
+ * Get ALL upcoming matches in next 24 hours (not limited to 6)
+ * Cache: 5 minutes (upcoming matches don't change as frequently)
+ */
+router.get('/upcoming/all', cacheMiddleware(300), async (req, res) => {
+  try {
+    logger.info('⏰ Getting ALL upcoming matches (next 24h)');
+    const currentTime = Math.floor(Date.now() / 1000);
+    const today = new Date().toISOString().split('T')[0];
+    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    // Get both today's and tomorrow's matches
+    const [todayResponse, tomorrowResponse] = await Promise.all([
+      (async () => {
+        let allMatches: any[] = [];
+        let currentPage = 1;
+        let hasMorePages = true;
+
+        while (hasMorePages && allMatches.length < 500) {
+          try {
+            const pageResponse = await DefaultService.getTodaysMatches({
+              key: process.env.FOOTYSTATS_API_KEY!,
+              timezone: undefined,
+              date: today,
+              page: currentPage
+            });
+
+            if (pageResponse?.data && Array.isArray(pageResponse.data)) {
+              allMatches.push(...pageResponse.data);
+
+              if (pageResponse.pager && currentPage < (pageResponse.pager.max_page || 1)) {
+                currentPage++;
+              } else {
+                hasMorePages = false;
+              }
+            } else {
+              hasMorePages = false;
+            }
+
+            if (currentPage > 10) break;
+          } catch (error) {
+            hasMorePages = false;
+          }
+        }
+        return allMatches;
+      })(),
+      (async () => {
+        let allMatches: any[] = [];
+        let currentPage = 1;
+        let hasMorePages = true;
+
+        while (hasMorePages && allMatches.length < 500) {
+          try {
+            const pageResponse = await DefaultService.getTodaysMatches({
+              key: process.env.FOOTYSTATS_API_KEY!,
+              timezone: undefined,
+              date: tomorrow,
+              page: currentPage
+            });
+
+            if (pageResponse?.data && Array.isArray(pageResponse.data)) {
+              allMatches.push(...pageResponse.data);
+
+              if (pageResponse.pager && currentPage < (pageResponse.pager.max_page || 1)) {
+                currentPage++;
+              } else {
+                hasMorePages = false;
+              }
+            } else {
+              hasMorePages = false;
+            }
+
+            if (currentPage > 10) break;
+          } catch (error) {
+            hasMorePages = false;
+          }
+        }
+        return allMatches;
+      })()
+    ]);
+
+    const allMatches = [...todayResponse, ...tomorrowResponse];
+
+    // Filter for upcoming matches in next 24 hours
+    const allUpcomingMatches = allMatches.filter(match => {
+      const matchTime = match.date_unix || 0;
+      const timeDiff = matchTime - currentTime;
+      return timeDiff > 0 && timeDiff <= (24 * 60 * 60); // Next 24 hours only
+    });
+
+    logger.info(`⏰ Found ${allUpcomingMatches.length} upcoming matches (24h) out of ${allMatches.length} total matches`);
+
+    res.json({
+      success: true,
+      data: {
+        matches: allUpcomingMatches,
+        totalCount: allUpcomingMatches.length,
+        totalMatches: allMatches.length
+      },
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    logger.error('❌ Error getting all upcoming matches:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get upcoming matches',
       details: error instanceof Error ? error.message : String(error)
     });
   }
