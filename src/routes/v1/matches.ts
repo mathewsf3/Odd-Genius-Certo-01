@@ -18,7 +18,6 @@ import { MatchController } from '../../controllers/MatchController';
 import { cacheMiddleware } from '../../middleware/cache';
 import { rateLimiter } from '../../middleware/rateLimiter';
 import { logger } from '../../utils/logger';
-import { FootyStatsTransformer } from '../../utils/transformers/FootyStatsTransformer';
 
 const router = Router();
 const matchController = new MatchController();
@@ -95,6 +94,31 @@ router.get('/live/all', cacheMiddleware(10), (req, res, next) => {
 });
 
 /**
+ * GET /api/v1/matches/upcoming
+ * Get upcoming matches (limited for dashboard)
+ * Supports ?limit=6 parameter
+ * Cache: 5 minutes
+ */
+router.get('/upcoming', cacheMiddleware(300), async (req, res) => {
+  try {
+    const { liveMatchService } = await import('../../services/liveMatchService');
+    const limit = parseInt(req.query.limit as string) || 6;
+
+    logger.info(`⏰ Getting upcoming matches (limit: ${limit})`);
+    const result = await liveMatchService.getUpcomingMatches(limit);
+
+    res.json(result);
+  } catch (error) {
+    logger.error('❌ Error getting upcoming matches:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get upcoming matches',
+      details: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
  * GET /api/v1/matches/upcoming/all
  * Get ALL upcoming matches in next 48 hours (for dedicated upcoming page)
  * Supports ?hours=48 parameter to customize time range
@@ -115,54 +139,66 @@ router.get('/upcoming/all', cacheMiddleware(300), (req, res, next) => {
  */
 router.get('/dashboard', cacheMiddleware(300), async (req, res) => {
   try {
-    logger.info('📊 Getting optimized dashboard data with single API call');
+    logger.info('📊 Getting optimized dashboard data - MULTI-DAY FETCH for upcoming matches');
 
     const { matchAnalysisService } = await import('../../services/MatchAnalysisService');
 
-    // ✅ FIXED: Use complete pagination like the working methods
+    // ✅ FIXED: Get matches for today + next 2 days with proper timezone
     const currentTime = Math.floor(Date.now() / 1000);
-    const today = new Date().toISOString().split('T')[0];
+    const timezone = 'America/Sao_Paulo'; // 🕒 Brazilian timezone
 
-    // Get ALL today's matches with complete pagination (like getLiveMatches does)
-    let allTodayMatches: any[] = [];
-    let currentPage = 1;
-    let hasMorePages = true;
-    const MAX_MATCHES = 500; // Reasonable limit
-
-    while (hasMorePages && allTodayMatches.length < MAX_MATCHES) {
-      try {
-        const pageResponse = await DefaultService.getTodaysMatches({
-          key: process.env.FOOTYSTATS_API_KEY!,
-          timezone: undefined,
-          date: today,
-          page: currentPage
-        });
-
-        if (pageResponse?.data && Array.isArray(pageResponse.data)) {
-          allTodayMatches.push(...pageResponse.data);
-
-          // Check if there are more pages
-          if (pageResponse.pager && currentPage < (pageResponse.pager.max_page || 1)) {
-            currentPage++;
-          } else {
-            hasMorePages = false;
-          }
-        } else {
-          hasMorePages = false;
-        }
-
-        // Safety check
-        if (currentPage > 10) break;
-      } catch (error) {
-        logger.warn(`⚠️ Error fetching page ${currentPage}:`, error);
-        hasMorePages = false;
-      }
+    // ✅ MULTI-DAY FETCH: Get matches for today + next 2 days
+    const dates = [];
+    for (let i = 0; i < 3; i++) { // Today + next 2 days
+      const date = new Date(Date.now() + i * 24 * 60 * 60 * 1000);
+      dates.push(date.toISOString().split('T')[0]); // YYYY-MM-DD format
     }
 
-    logger.info(`📊 Fetched ${allTodayMatches.length} matches for ${today} across ${currentPage} pages`);
+    logger.info(`📅 Fetching matches for dates: ${dates.join(', ')} with timezone: ${timezone}`);
 
-    // Use the fetched matches
-    const allMatches = allTodayMatches;
+    // ✅ PARALLEL API CALLS: Get matches for all dates
+    const allDateResponses = await Promise.all(
+      dates.map(async (date) => {
+        let allMatches: any[] = [];
+        let currentPage = 1;
+        let hasMorePages = true;
+        const MAX_PAGES = 10; // Reasonable limit for dashboard
+
+        while (hasMorePages && currentPage <= MAX_PAGES) {
+          try {
+            const pageResponse = await DefaultService.getTodaysMatches({
+              key: process.env.FOOTYSTATS_API_KEY!,
+              timezone: timezone,
+              date: date,
+              page: currentPage
+            });
+
+            if (pageResponse?.data && Array.isArray(pageResponse.data)) {
+              allMatches.push(...pageResponse.data);
+
+              // Check if there are more pages
+              if (pageResponse.pager && currentPage < (pageResponse.pager.max_page || 1)) {
+                currentPage++;
+              } else {
+                hasMorePages = false;
+              }
+            } else {
+              hasMorePages = false;
+            }
+          } catch (error) {
+            logger.warn(`⚠️ Error fetching ${date} page ${currentPage}:`, error);
+            hasMorePages = false;
+          }
+        }
+
+        logger.info(`📈 ${date}: Total ${allMatches.length} matches fetched`);
+        return allMatches;
+      })
+    );
+
+    // Combine all matches from all dates
+    const allMatches = allDateResponses.flat();
+    logger.info(`🔄 Combined total: ${allMatches.length} matches from ${dates.length} dates`);
 
     if (allMatches.length === 0) {
       logger.warn('⚠️ No matches data available for today');
@@ -180,33 +216,80 @@ router.get('/dashboard', cacheMiddleware(300), async (req, res) => {
       });
     }
 
-    // ✅ NORMALIZE ALL MATCHES FIRST - Following user's checklist
-    const normalizedMatches = allMatches.map(match => {
-      try {
-        return FootyStatsTransformer.normalizeMatch(match);
-      } catch (error) {
-        logger.error('❌ Error normalizing match:', error, 'Match data:', match);
-        // Return original match with fallback status
-        return {
-          ...match,
-          status: match.status === 'incomplete' ? 'live' : 'upcoming'
-        };
+    // ✅ ENHANCED STATUS NORMALIZATION - Following user's analysis
+    // currentTime already declared above
+
+    // ✅ LIVE MATCH DETECTION - Following FootyStats API documentation
+    const LIVE_KEYWORDS = [
+      '1st half', '2nd half', 'extra time', 'penalty', 'half time', 'ht', 'inplay',
+      'incomplete' // FootyStats uses 'incomplete' for live matches
+    ];
+
+    const allLiveMatches = allMatches.filter(match => {
+      const status = match.status?.toLowerCase() || '';
+      const matchTime = match.date_unix || 0;
+      const timeDiff = currentTime - matchTime;
+
+      // Check if status indicates live match
+      const isLiveStatus = LIVE_KEYWORDS.some(keyword => status.includes(keyword));
+
+      // Match is live if:
+      // 1. Status indicates live (incomplete, 1st half, etc.)
+      // 2. Match time has passed (started)
+      // 3. Not too old (within 4 hours = 14400 seconds)
+      return isLiveStatus &&
+             matchTime <= currentTime &&
+             timeDiff >= 0 &&
+             timeDiff <= 14400; // 4 hours max for live matches
+    });
+
+    // ✅ FIXED: Use SAME LOGIC as /upcoming/all endpoint (SIMPLE TIME-BASED FILTER)
+    const allUpcomingMatches = allMatches.filter(match => {
+      const matchTime = match.date_unix || 0;
+      const timeDiff = matchTime - currentTime;
+      const isUpcoming = timeDiff > 0 && timeDiff <= (24 * 60 * 60); // Next 24 hours only
+
+      if (isUpcoming) {
+        const matchDate = new Date(matchTime * 1000);
+        logger.debug(`✅ Upcoming: ${match.home_name} vs ${match.away_name} at ${matchDate.toISOString()}`);
       }
+
+      return isUpcoming;
     });
 
-    // ✅ FIXED: Calculate REAL totals using normalized status
-    const allLiveMatches = normalizedMatches.filter(match => {
-      return match.status === 'live';
-    });
+    // ✅ NORMALIZE MATCH DATA - Following user's checklist
+    const normalizeMatchData = (match: any, sourceArray: 'live' | 'upcoming') => {
+      const status = match.status?.toLowerCase() || '';
+      const matchTime = match.date_unix || 0;
+      const timeDiff = matchTime - currentTime;
 
-    // ✅ FIXED: Calculate REAL upcoming matches using normalized status
-    const allUpcomingMatches = normalizedMatches.filter(match => {
-      return match.status === 'upcoming';
-    });
+      // ✅ TRUST SOURCE ARRAY CLASSIFICATION - Following user's analysis
+      let normalizedStatus = sourceArray; // Trust if it came from live or upcoming array
 
-    // ✅ Dashboard display: Limit to 6 for layout purposes
-    const liveMatches = allLiveMatches.slice(0, 6);
-    const upcomingMatches = allUpcomingMatches.slice(0, 6);
+      // ✅ DOUBLE-CHECK WITH STATUS KEYWORDS
+      if (sourceArray === 'live') {
+        // If it's in live array, it should be live
+        normalizedStatus = 'live';
+      } else if (sourceArray === 'upcoming') {
+        // If it's in upcoming array, it should be upcoming
+        normalizedStatus = 'upcoming';
+      }
+
+      return {
+        ...match,
+        // ✅ CORRECT STATUS MAPPING
+        status: normalizedStatus,
+        // ✅ REAL SCORES - Use actual goal counts from API
+        homeGoalCount: match.homeGoalCount || 0,
+        awayGoalCount: match.awayGoalCount || 0,
+        // ✅ PRESERVE ORIGINAL FIELDS
+        originalStatus: match.status
+      };
+    };
+
+    // ✅ Dashboard display: Limit to 6 for layout purposes with normalized data
+    const liveMatches = allLiveMatches.slice(0, 6).map(match => normalizeMatchData(match, 'live'));
+    const upcomingMatches = allUpcomingMatches.slice(0, 6).map(match => normalizeMatchData(match, 'upcoming'));
 
     const dashboardData = {
       liveMatches,

@@ -261,18 +261,22 @@ export class FootyStatsService {
         };
       }
 
-      const matches = Array.isArray(response.data) ? response.data : [];
-      console.log(`✅ Retrieved ${matches.length} matches for ${targetDate}`);
+      const rawMatches = Array.isArray(response.data) ? response.data : [];
+      console.log(`✅ Retrieved ${rawMatches.length} raw matches for ${targetDate}`);
+
+      // ✅ NORMALIZE MATCHES - Convert FootyStats format to frontend format
+      const normalizedMatches = normalizeFootyStatsMatches(rawMatches);
+      console.log(`🔄 Normalized ${normalizedMatches.length} matches with proper scores and status`);
 
       // Cache with short TTL for live data
-      await this.cacheManager.set(cacheKey, matches, {
+      await this.cacheManager.set(cacheKey, normalizedMatches, {
         ttl: CACHE_TTL.LIVE_MATCHES,
         tags: ['matches', 'live-data', 'today']
       });
 
       return {
         success: true,
-        data: matches,
+        data: normalizedMatches as any, // Type assertion for compatibility
         metadata: {
           timestamp: new Date().toISOString(),
           source: FOOTY_ENDPOINTS.TODAYS_MATCHES,

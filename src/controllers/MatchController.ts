@@ -12,6 +12,7 @@
 
 import { NextFunction, Request, Response } from 'express';
 import { BasicMatchInfo, DetailedMatchInfo, MatchAnalysisResult, MatchAnalysisService } from '../services/MatchAnalysisService';
+import { liveMatchService } from '../services/liveMatchService';
 import { logger } from '../utils/logger';
 
 export class MatchController {
@@ -274,27 +275,42 @@ export class MatchController {
 
   /**
    * GET /api/v1/matches/live
-   * Get live matches and their current status
+   * ✅ FIXED: Get live matches with real-time scores using new live service
    * Supports both limited (dashboard) and unlimited (page) requests
    */
   async getLiveMatches(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      logger.info('⚡ Getting live matches');
+      logger.info('🔴 Getting live matches with real-time scores - FIXED VERSION');
 
       // Check if this is a request for all matches (live page) or limited (dashboard)
       const limitParam = req.query.limit as string;
       const limit = limitParam ? parseInt(limitParam) : undefined;
+      const forceRefresh = req.query.refresh === 'true';
 
-      logger.info(`Live matches request: ${limit ? `limited to ${limit}` : 'unlimited (all)'}`);
+      logger.info(`Live matches request: ${limit ? `limited to ${limit}` : 'unlimited (all)'}, refresh: ${forceRefresh}`);
 
-      const liveMatches = await this.matchAnalysisService.getLiveMatches(limit);
+      // Use new live match service for real-time data
+      const result = await liveMatchService.getLiveMatches(forceRefresh);
+
+      if (!result.success) {
+        res.status(500).json({
+          success: false,
+          message: 'Failed to get live matches',
+          error: result.error
+        });
+        return;
+      }
+
+      // Apply limit if specified
+      const liveMatches = limit ? result.data.slice(0, limit) : result.data;
 
       res.json({
         success: true,
         data: {
           liveMatches: liveMatches,
           totalLive: liveMatches.length,
-          lastUpdated: new Date().toISOString(),
+          lastUpdated: result.metadata.lastUpdated,
+          nextUpdate: result.metadata.nextUpdate,
           isLimited: !!limit,
           limit: limit || null
         },

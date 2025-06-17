@@ -330,7 +330,7 @@ export class MatchAnalysisService {
 
     /**
      * Get live matches from FootyStats API
-     * FIXED: Uses correct status filtering based on FootyStats API specification
+     * ✅ FIXED: Uses new normalizer for proper score and status handling
      */
     async getLiveMatches(limit?: number): Promise<any[]> {
         try {
@@ -442,104 +442,19 @@ export class MatchAnalysisService {
 
             console.log(`🔍 SAMPLE MATCHES TIME ANALYSIS:`, sampleMatches);
 
-            // ✅ COMPREHENSIVE LIVE FILTERING: Accept ALL possible live status values globally
-            const liveMatches = matches.filter((match: any) => {
-                // ✅ COMPREHENSIVE STATUS CHECK - Include all possible live statuses from global football
-                const status = match.status?.toLowerCase() || '';
 
-                // Live status keywords (broader detection)
-                // ✅ CRITICAL FIX: 'incomplete' DOES mean live when match has started!
-                // Analysis shows 'incomplete' matches that started hours ago = LIVE matches
-                const liveKeywords = [
-                    'live', 'in progress', 'in-progress', 'playing', 'ongoing', 'active',
-                    'started', '1st half', 'first half', 'half-time', 'halftime', 'ht',
-                    '2nd half', 'second half', 'paused', 'stoppage', 'extra time', 'et',
-                    'penalties', 'penalty shootout', 'pen', 'delayed', 'suspended',
-                    'incomplete' // ✅ RE-ADDED: 'incomplete' + started = LIVE matches!
-                ];
 
-                // Finished status keywords (to exclude)
-                const finishedKeywords = [
-                    'full-time', 'ft', 'ended', 'finished', 'complete', 'final',
-                    'postponed', 'cancelled', 'canceled', 'abandoned', 'void'
-                ];
+            // ✅ NORMALIZE AND FILTER LIVE MATCHES - Use new normalizer
+            const normalizedMatches = normalizeFootyStatsMatches(allMatches);
 
-                // Check if status contains live keywords
-                const isLiveStatus = liveKeywords.some(keyword => status.includes(keyword));
-                const isFinished = finishedKeywords.some(keyword => status.includes(keyword));
+            // Filter for live matches using normalized status
+            const liveMatches = normalizedMatches.filter(match =>
+                match.status === 'ao-vivo'
+            );
 
-                // Time calculations for global coverage
-                const matchTime = match.date_unix || 0;
-                const currentTime = Math.floor(Date.now() / 1000);
-                const hasStarted = matchTime > 0 && matchTime < currentTime;
+            console.log(`🔍 Found ${liveMatches.length} live matches from ${allMatches.length} total matches`);
 
-                // ✅ EXTENDED time window for live matches (up to 24 hours for delays, suspensions, etc.)
-                // If a match shows "incomplete" status, it means it hasn't finished yet
-                const timeSinceStart = currentTime - matchTime;
-                const isWithinLiveWindow = timeSinceStart > 0 && timeSinceStart < (24 * 60 * 60); // 24 hours
-
-                // ✅ EXCLUDE ESPORTS/VIRTUAL MATCHES
-                const isEsports = this.isEsportsMatch(match);
-                if (isEsports) {
-                    console.log(`🚫 EXCLUDED ESPORTS: ${match.home_name} vs ${match.away_name}`);
-                    return false;
-                }
-
-                // ✅ COMPREHENSIVE LIVE DETECTION: Multiple conditions for global coverage
-                // CRITICAL: 'incomplete' means LIVE when match has started, UPCOMING when future
-                const hasGoalActivity = (match.homeGoalCount > 0 || match.awayGoalCount > 0);
-
-                // Special handling for 'incomplete' status
-                const isIncompleteStatus = status === 'incomplete';
-                const isIncompleteAndLive = isIncompleteStatus && hasStarted && isWithinLiveWindow;
-                const isIncompleteAndUpcoming = isIncompleteStatus && !hasStarted;
-
-                // Live detection logic:
-                // 1. 'incomplete' status AND match has started (PRIORITY: status over time!)
-                // 2. OR other live status keywords AND not finished AND started
-                // 3. OR match has started, within live window, and not finished
-                // 4. OR has goal activity and started (indicates active match)
-
-                // ✅ SPECIAL CASE: If status is "incomplete" and match started, it's likely live
-                // regardless of time (could be delayed, suspended, or very long match)
-                const isIncompleteAndStarted = isIncompleteStatus && hasStarted;
-
-                const isLive = isIncompleteAndStarted ||  // ✅ PRIORITY FIX: incomplete + started = LIVE (ignore time window)
-                              (isLiveStatus && !isIncompleteStatus && !isFinished && hasStarted) ||
-                              (hasStarted && isWithinLiveWindow && !isFinished && !isIncompleteAndUpcoming) ||
-                              (hasStarted && hasGoalActivity && !isFinished);
-
-                // ✅ DETAILED LOGGING FOR DEBUGGING
-                if (isLive) {
-                    console.log(`🔴 LIVE MATCH DETECTED:`, {
-                        teams: `${match.home_name} vs ${match.away_name}`,
-                        status: status,
-                        score: `${match.homeGoalCount || 0}-${match.awayGoalCount || 0}`,
-                        matchTime: new Date(matchTime * 1000).toISOString(),
-                        currentTime: new Date(currentTime * 1000).toISOString(),
-                        timeSinceStart: `${Math.floor(timeSinceStart / 60)} minutes`,
-                        hasStarted,
-                        isWithinLiveWindow,
-                        hasGoalActivity,
-                        isLiveStatus,
-                        isFinished
-                    });
-                } else if (hasStarted && !isFinished) {
-                    // Log matches that started but weren't detected as live for debugging
-                    console.log(`⚠️ STARTED BUT NOT LIVE:`, {
-                        teams: `${match.home_name} vs ${match.away_name}`,
-                        status: status,
-                        timeSinceStart: `${Math.floor(timeSinceStart / 60)} minutes`,
-                        isLiveStatus,
-                        isFinished,
-                        isWithinLiveWindow
-                    });
-                }
-
-                return isLive;
-            });
-
-            // Apply limit if specified (for dashboard), otherwise return all (for live page)
+            // Apply limit if specified (for dashboard vs live page)
             const resultMatches = limit ? liveMatches.slice(0, limit) : liveMatches;
 
             console.log(`🎯 Filtered to ${resultMatches.length} live matches${limit ? ` (limited from ${liveMatches.length} total)` : ''}`);
