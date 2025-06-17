@@ -41,16 +41,26 @@ interface MatchCardProps {
 }
 
 const getStatusConfig = (status: string) => {
-  // Map FootyStats API status to Portuguese
+  // ✅ NORMALIZED STATUS MAPPING - Following user's checklist
   const statusMap: { [key: string]: { label: string; className: string; icon: string } } = {
+    // Live matches
+    'live': { label: 'AO VIVO', className: 'bg-red-500 text-white animate-pulse', icon: '🔴' },
     'incomplete': { label: 'AO VIVO', className: 'bg-red-500 text-white animate-pulse', icon: '🔴' },
+
+    // Upcoming matches
+    'upcoming': { label: 'EM BREVE', className: 'bg-yellow-100 text-yellow-800', icon: '⏰' },
+    'scheduled': { label: 'EM BREVE', className: 'bg-yellow-100 text-yellow-800', icon: '⏰' },
+
+    // Finished matches
+    'finished': { label: 'FINALIZADA', className: 'bg-gray-500 text-white', icon: '✅' },
     'complete': { label: 'FINALIZADA', className: 'bg-gray-500 text-white', icon: '✅' },
-    'scheduled': { label: 'AGENDADA', className: 'bg-green-100 text-green-800', icon: '⏰' },
+
+    // Special cases
     'postponed': { label: 'ADIADA', className: 'bg-yellow-500 text-black', icon: '⚠️' },
     'cancelled': { label: 'CANCELADA', className: 'bg-red-100 text-red-800', icon: '❌' }
   };
 
-  return statusMap[status] || { label: 'AGENDADA', className: 'bg-green-100 text-green-800', icon: '⏰' };
+  return statusMap[status] || { label: 'EM BREVE', className: 'bg-yellow-100 text-yellow-800', icon: '⏰' };
 };
 
 const MatchCard: React.FC<MatchCardProps> = ({

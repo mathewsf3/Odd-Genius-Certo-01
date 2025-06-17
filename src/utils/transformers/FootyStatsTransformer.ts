@@ -8,6 +8,28 @@ import type { ApiResponse, Country, League, Match, PaginatedResponse, Player, Te
 import { DEFAULT_VALUES } from '../constants/footballConstants';
 import { logger } from '../logger';
 
+// ✅ MATCH STATUS NORMALIZATION - Following user's checklist
+const LIVE_KEYWORDS = [
+  '1st Half', '2nd Half', 'Extra Time', 'Penalty',
+  'Half Time', 'HT', 'Halftime', 'Break',
+  'incomplete', 'In Progress', 'Live'
+];
+
+const STATUS_MAP: Record<string, 'upcoming' | 'finished' | 'live'> = {
+  'Not Started': 'upcoming',
+  'TBD': 'upcoming',
+  'Scheduled': 'upcoming',
+  'Finished': 'finished',
+  'FT': 'finished',
+  'Full Time': 'finished',
+  'Complete': 'finished',
+  'Cancelled': 'finished',
+  'Postponed': 'upcoming',
+  'Suspended': 'finished'
+};
+
+const PLACEHOLDER_LOGO = '/assets/placeholder-team.svg';
+
 // Standardized response format for our API
 export interface StandardizedResponse<T> {
   success: boolean;
@@ -91,7 +113,83 @@ export interface EnhancedMatch extends Match {
   };
 }
 
+// ✅ NORMALIZED MATCH INTERFACE - Following user's checklist
+export interface NormalizedMatch {
+  id: number;
+  status: 'live' | 'upcoming' | 'finished';
+  minute?: string | null;
+  kickoff: string;
+  home: {
+    id: number;
+    name: string;
+    logo: string;
+    score: number;
+  };
+  away: {
+    id: number;
+    name: string;
+    logo: string;
+    score: number;
+  };
+  // Keep original fields for compatibility
+  [key: string]: any;
+}
+
 export class FootyStatsTransformer {
+  /**
+   * ✅ NORMALIZE MATCH DATA - Following user's checklist
+   * Fixes: Status labels, real scores, logo fallbacks
+   */
+  static normalizeMatch(rawMatch: any): NormalizedMatch {
+    const matchStatus = rawMatch.status || rawMatch.match_status || '';
+
+    // Determine if match is live using keywords
+    const isLive = LIVE_KEYWORDS.some(keyword =>
+      matchStatus.toLowerCase().includes(keyword.toLowerCase())
+    );
+
+    // Determine status
+    let status: 'live' | 'upcoming' | 'finished';
+    if (isLive) {
+      status = 'live';
+    } else {
+      status = STATUS_MAP[matchStatus] || 'upcoming';
+    }
+
+    // Ensure scores are numbers with proper fallback
+    const homeScore = rawMatch.homeGoalCount != null ? Number(rawMatch.homeGoalCount) :
+                     rawMatch.home_score != null ? Number(rawMatch.home_score) : 0;
+    const awayScore = rawMatch.awayGoalCount != null ? Number(rawMatch.awayGoalCount) :
+                     rawMatch.away_score != null ? Number(rawMatch.away_score) : 0;
+
+    // Ensure logos have fallback
+    const homeLogo = rawMatch.home_image || rawMatch.home_team_logo || PLACEHOLDER_LOGO;
+    const awayLogo = rawMatch.away_image || rawMatch.away_team_logo || PLACEHOLDER_LOGO;
+
+    const normalized: NormalizedMatch = {
+      id: rawMatch.id || rawMatch.match_id || 0,
+      status,
+      minute: rawMatch.match_time || rawMatch.minute || null,
+      kickoff: rawMatch.date || rawMatch.match_date || rawMatch.kickoff || '',
+      home: {
+        id: rawMatch.home_id || rawMatch.home_team_id || 0,
+        name: rawMatch.home_name || rawMatch.home_team_name || 'Time Casa',
+        logo: homeLogo,
+        score: homeScore
+      },
+      away: {
+        id: rawMatch.away_id || rawMatch.away_team_id || 0,
+        name: rawMatch.away_name || rawMatch.away_team_name || 'Time Visitante',
+        logo: awayLogo,
+        score: awayScore
+      },
+      // Keep all original fields for compatibility
+      ...rawMatch
+    };
+
+    return normalized;
+  }
+
   /**
    * Transform FootyStats ApiResponse to our standardized format
    */

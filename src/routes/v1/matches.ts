@@ -18,6 +18,7 @@ import { MatchController } from '../../controllers/MatchController';
 import { cacheMiddleware } from '../../middleware/cache';
 import { rateLimiter } from '../../middleware/rateLimiter';
 import { logger } from '../../utils/logger';
+import { FootyStatsTransformer } from '../../utils/transformers/FootyStatsTransformer';
 
 const router = Router();
 const matchController = new MatchController();
@@ -179,37 +180,17 @@ router.get('/dashboard', cacheMiddleware(300), async (req, res) => {
       });
     }
 
-    // ✅ FIXED: Calculate REAL totals first, then limit for display
-    const allLiveMatches = allMatches.filter(match => {
-      const status = match.status?.toLowerCase() || '';
-      const matchTime = match.date_unix || 0;
-      const timeDiff = currentTime - matchTime;
+    // ✅ NORMALIZE ALL MATCHES FIRST - Following user's checklist
+    const normalizedMatches = allMatches.map(match => FootyStatsTransformer.normalizeMatch(match));
 
-      // Match is live if:
-      // 1. Status is incomplete (ongoing)
-      // 2. Match time has passed (started)
-      // 3. Not too old (within 4 hours = 14400 seconds)
-      return status === 'incomplete' &&
-             matchTime <= currentTime &&
-             timeDiff >= 0 &&
-             timeDiff <= 14400; // 4 hours max for live matches
+    // ✅ FIXED: Calculate REAL totals using normalized status
+    const allLiveMatches = normalizedMatches.filter(match => {
+      return match.status === 'live';
     });
 
-    // ✅ FIXED: Calculate REAL upcoming matches in next 24h with detailed logging
-    let upcomingCount = 0;
-    const allUpcomingMatches = allMatches.filter(match => {
-      const matchTime = match.date_unix || 0;
-      const timeDiff = matchTime - currentTime;
-      const isUpcoming = timeDiff > 0 && timeDiff <= (24 * 60 * 60); // Next 24 hours only
-
-      // Debug logging for first few upcoming matches
-      if (isUpcoming && upcomingCount < 5) {
-        const matchDate = new Date(matchTime * 1000);
-        logger.debug(`🔍 Upcoming match found: ${match.home_name} vs ${match.away_name} at ${matchDate.toISOString()}`);
-        upcomingCount++;
-      }
-
-      return isUpcoming;
+    // ✅ FIXED: Calculate REAL upcoming matches using normalized status
+    const allUpcomingMatches = normalizedMatches.filter(match => {
+      return match.status === 'upcoming';
     });
 
     // ✅ Dashboard display: Limit to 6 for layout purposes
