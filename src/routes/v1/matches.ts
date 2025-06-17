@@ -181,7 +181,18 @@ router.get('/dashboard', cacheMiddleware(300), async (req, res) => {
     }
 
     // ✅ NORMALIZE ALL MATCHES FIRST - Following user's checklist
-    const normalizedMatches = allMatches.map(match => FootyStatsTransformer.normalizeMatch(match));
+    const normalizedMatches = allMatches.map(match => {
+      try {
+        return FootyStatsTransformer.normalizeMatch(match);
+      } catch (error) {
+        logger.error('❌ Error normalizing match:', error, 'Match data:', match);
+        // Return original match with fallback status
+        return {
+          ...match,
+          status: match.status === 'incomplete' ? 'live' : 'upcoming'
+        };
+      }
+    });
 
     // ✅ FIXED: Calculate REAL totals using normalized status
     const allLiveMatches = normalizedMatches.filter(match => {

@@ -137,12 +137,12 @@ const MatchCard: React.FC<MatchCardProps> = ({
           <div className="flex flex-col items-center space-y-2 flex-1">
             <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-green-200 bg-white">
               <img
-                src={match.home_image ? `https://footystats.org/img/${match.home_image}` : '/default-team.svg'}
+                src={match.home_image ? `https://footystats.org/img/${match.home_image}` : '/assets/placeholder-team.svg'}
                 alt={match.home_name}
                 className="w-full h-full object-cover"
                 onError={(e) => {
                   const target = e.target as HTMLImageElement;
-                  target.src = '/default-team.svg';
+                  target.src = '/assets/placeholder-team.svg';
                 }}
                 loading="lazy"
               />
@@ -153,11 +153,15 @@ const MatchCard: React.FC<MatchCardProps> = ({
 
           {/* Score */}
           <div className="flex flex-col items-center space-y-2 px-4">
-            {match.status === 'incomplete' || match.status === 'complete' ? (
+            {match.status === 'live' || match.status === 'incomplete' || match.status === 'finished' || match.status === 'complete' ? (
               <div className="flex items-center space-x-4">
-                <span className="text-3xl font-bold text-green-600">{match.homeGoalCount || 0}</span>
+                <span className="text-3xl font-bold text-green-600">
+                  {match.homeGoalCount != null ? match.homeGoalCount : 0}
+                </span>
                 <span className="text-2xl font-bold text-gray-400">×</span>
-                <span className="text-3xl font-bold text-green-600">{match.awayGoalCount || 0}</span>
+                <span className="text-3xl font-bold text-green-600">
+                  {match.awayGoalCount != null ? match.awayGoalCount : 0}
+                </span>
               </div>
             ) : (
               <div className="flex flex-col items-center">
@@ -171,12 +175,12 @@ const MatchCard: React.FC<MatchCardProps> = ({
           <div className="flex flex-col items-center space-y-2 flex-1">
             <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-green-200 bg-white">
               <img
-                src={match.away_image ? `https://footystats.org/img/${match.away_image}` : '/default-team.svg'}
+                src={match.away_image ? `https://footystats.org/img/${match.away_image}` : '/assets/placeholder-team.svg'}
                 alt={match.away_name}
                 className="w-full h-full object-cover"
                 onError={(e) => {
                   const target = e.target as HTMLImageElement;
-                  target.src = '/default-team.svg';
+                  target.src = '/assets/placeholder-team.svg';
                 }}
                 loading="lazy"
               />
