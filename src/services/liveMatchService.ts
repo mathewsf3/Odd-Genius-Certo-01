@@ -32,7 +32,7 @@ const API_KEY = process.env.FOOTBALL_API_KEY || '4fd202fbc338fbd450e91761c7b8364
 
 export interface LiveMatchServiceResponse {
   success: boolean;
-  data: MatchData[]; // ✅ FIXED: Return normalized frontend format with proper scores
+  data: RawMatchData[]; // ✅ FIXED: Return normalized frontend format with proper scores
   metadata: {
     totalMatches: number;
     liveMatches: number;
@@ -118,12 +118,12 @@ export class LiveMatchService {
 
       // Fetch today's matches with pagination
       while (hasMorePages && currentPage <= MAX_PAGES) {
-        const response = await DefaultService.getTodaysMatches(
-          API_KEY,
-          'America/Sao_Paulo', // Brazilian timezone
-          today,
-          currentPage
-        );
+        const response = await DefaultService.getTodaysMatches({
+          key: API_KEY,
+          timezone: 'America/Sao_Paulo', // Brazilian timezone
+          date: today,
+          page: currentPage
+        });
 
         if (!response?.data || !Array.isArray(response.data)) {
           console.log(`❌ No data for page ${currentPage}`);
@@ -239,21 +239,21 @@ export class LiveMatchService {
         // Use frontend-compatible format directly
         return {
           id: rawMatch.id || 0,
-          homeID: rawMatch.homeID || rawMatch.home_team_id || 0,
-          awayID: rawMatch.awayID || rawMatch.away_team_id || 0,
+          homeID: rawMatch.homeID || 0,
+          awayID: rawMatch.awayID || 0,
           home_name: rawMatch.home_name || 'Time Casa',
           away_name: rawMatch.away_name || 'Time Visitante',
           home_image: rawMatch.home_image || '/default-team.svg',
           away_image: rawMatch.away_image || '/default-team.svg',
-          homeGoalCount: rawMatch.homeGoalCount || rawMatch.home_score || rawMatch.score_home || 0,
-          awayGoalCount: rawMatch.awayGoalCount || rawMatch.away_score || rawMatch.score_away || 0,
+          homeGoalCount: rawMatch.homeGoalCount || 0,
+          awayGoalCount: rawMatch.awayGoalCount || 0,
           status: 'live',
           date_unix: rawMatch.date_unix || Math.floor(Date.now() / 1000),
           stadium_name: rawMatch.stadium_name || 'Estádio',
           stadium_location: rawMatch.stadium_location || 'Cidade',
           competition_id: rawMatch.competition_id || 0,
-          competition_name: rawMatch.competition_name || 'Liga',
-          country_name: rawMatch.country_name || 'País'
+          competition_name: 'Liga',
+          country_name: 'País'
         };
       } catch (error) {
         console.error(`❌ Error normalizing match ${rawMatch.id}:`, error);
@@ -320,12 +320,12 @@ export class LiveMatchService {
 
       // Fetch matches for next 3 days
       for (const date of dates) {
-        const response = await DefaultService.getTodaysMatches(
-          API_KEY,
-          'America/Sao_Paulo',
-          date,
-          1
-        );
+        const response = await DefaultService.getTodaysMatches({
+          key: API_KEY,
+          timezone: 'America/Sao_Paulo',
+          date: date,
+          page: 1
+        });
 
         if (response?.data && Array.isArray(response.data)) {
           allMatches.push(...response.data);
@@ -371,8 +371,8 @@ export class LiveMatchService {
           // Use frontend-compatible format directly
           return {
             id: rawMatch.id || 0,
-            homeID: rawMatch.homeID || rawMatch.home_team_id || 0,
-            awayID: rawMatch.awayID || rawMatch.away_team_id || 0,
+            homeID: rawMatch.homeID || 0,
+            awayID: rawMatch.awayID || 0,
             home_name: rawMatch.home_name || 'Time Casa',
             away_name: rawMatch.away_name || 'Time Visitante',
             home_image: rawMatch.home_image || '/default-team.svg',
@@ -454,12 +454,12 @@ export class LiveMatchService {
 
       // Get today's total count
       const today = new Date().toISOString().split('T')[0];
-      const todayResponse = await DefaultService.getTodaysMatches(
-        API_KEY,
-        'America/Sao_Paulo',
-        today,
-        1
-      );
+      const todayResponse = await DefaultService.getTodaysMatches({
+        key: API_KEY,
+        timezone: 'America/Sao_Paulo',
+        date: today,
+        page: 1
+      });
 
       const totalToday = todayResponse?.pager?.total_results || 0;
 

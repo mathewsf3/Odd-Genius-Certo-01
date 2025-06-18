@@ -80,7 +80,7 @@ router.get('/debug-today', (req, res, next) => {
  * 🚀 DEVELOPMENT RATE LIMITING: Aggressive caching in development
  * Cache: 60 seconds (10 minutes in development)
  */
-router.get('/live', developmentRateLimit(60), (req, res, next) => {
+router.get('/live', developmentRateLimit(60), (req: Request, res: Response, next: NextFunction) => {
   matchController.getLiveMatches(req, res, next);
 });
 
@@ -129,7 +129,7 @@ router.get('/upcoming', cacheMiddleware(300), async (req, res) => {
  * 🚀 DEVELOPMENT RATE LIMITING: Aggressive caching in development
  * Cache: 5 minutes (50 minutes in development)
  */
-router.get('/dashboard', developmentRateLimit(300), async (req, res) => {
+router.get('/dashboard', developmentRateLimit(300), async (req: Request, res: Response) => {
   try {
     logger.info('📊 Getting optimized dashboard data - MULTI-DAY FETCH for upcoming matches');
 
@@ -381,7 +381,7 @@ router.get('/dashboard', developmentRateLimit(300), async (req, res) => {
  * Get ALL live matches (not limited to 6)
  * Cache: 1 minute (live data changes frequently)
  */
-router.get('/live/all', cacheMiddleware(60), async (req, res) => {
+router.get('/live/all', cacheMiddleware(60), async (req: Request, res: Response) => {
   try {
     logger.info('🔴 Getting ALL live matches');
     const currentTime = Math.floor(Date.now() / 1000);
@@ -460,7 +460,7 @@ router.get('/live/all', cacheMiddleware(60), async (req, res) => {
  * Get ALL upcoming matches in next 24 hours (not limited to 6)
  * Cache: 5 minutes (upcoming matches don't change as frequently)
  */
-router.get('/upcoming/all', cacheMiddleware(300), async (req, res) => {
+router.get('/upcoming/all', cacheMiddleware(300), async (req: Request, res: Response) => {
   try {
     logger.info('⏰ Getting ALL upcoming matches (next 24h) - COMPREHENSIVE FETCH');
     const currentTime = Math.floor(Date.now() / 1000);

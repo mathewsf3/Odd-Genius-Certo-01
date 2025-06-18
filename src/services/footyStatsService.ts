@@ -1071,7 +1071,7 @@ export class FootyStatsService {
    */
   async getTeamLastXStats(teamId: number, matchCount?: number): Promise<ServiceResponse<any>> {
     const startTime = Date.now();
-    const cacheKey = cacheKeys.teamLastXStats(teamId, matchCount);
+    const cacheKey = cacheKeys.team.stats(teamId, matchCount);
 
     try {
       console.log(`📊 Getting team last X stats for ID: ${teamId}, matches: ${matchCount || 'default'}`);
@@ -1120,7 +1120,10 @@ export class FootyStatsService {
 
       // Fetch from API
       console.log('🔍 Fetching team last X stats from API...');
-      const response = await DefaultService.getTeamLastXStats(teamId, API_KEY);
+      const response = await DefaultService.getTeamLastXStats({
+        teamId,
+        key: API_KEY
+      });
 
       if (!response?.data) {
         return {
@@ -1174,7 +1177,7 @@ export class FootyStatsService {
    */
   async getPlayerStats(playerId: number): Promise<ServiceResponse<any>> {
     const startTime = Date.now();
-    const cacheKey = cacheKeys.playerStats(playerId);
+    const cacheKey = `footy:player:${playerId}:stats`;
 
     try {
       console.log(`⚽ Getting player stats for ID: ${playerId}`);
@@ -1210,7 +1213,10 @@ export class FootyStatsService {
 
       // Fetch from API
       console.log('🔍 Fetching player stats from API...');
-      const response = await DefaultService.getPlayerStats(playerId, API_KEY);
+      const response = await DefaultService.getPlayerStats({
+        playerId,
+        key: API_KEY
+      });
 
       if (!response?.data) {
         return {
@@ -1264,7 +1270,7 @@ export class FootyStatsService {
    */
   async getRefereeStats(refereeId: number): Promise<ServiceResponse<any>> {
     const startTime = Date.now();
-    const cacheKey = cacheKeys.refereeStats(refereeId);
+    const cacheKey = `footy:referee:${refereeId}:stats`;
 
     try {
       console.log(`👨‍⚖️ Getting referee stats for ID: ${refereeId}`);
@@ -1300,7 +1306,10 @@ export class FootyStatsService {
 
       // Fetch from API
       console.log('🔍 Fetching referee stats from API...');
-      const response = await DefaultService.getRefereeStats(refereeId, API_KEY);
+      const response = await DefaultService.getRefereeStats({
+        refereeId,
+        key: API_KEY
+      });
 
       if (!response?.data) {
         return {
@@ -1354,7 +1363,7 @@ export class FootyStatsService {
    */
   async getBttsStats(): Promise<ServiceResponse<any>> {
     const startTime = Date.now();
-    const cacheKey = cacheKeys.bttsStats();
+    const cacheKey = 'footy:stats:btts';
 
     try {
       console.log('🎯 Getting BTTS (Both Teams To Score) stats...');
@@ -1377,7 +1386,7 @@ export class FootyStatsService {
 
       // Fetch from API
       console.log('🔍 Fetching BTTS stats from API...');
-      const response = await DefaultService.getBttsStats(API_KEY);
+      const response = await DefaultService.getBttsStats({ key: API_KEY });
 
       if (!response?.data) {
         return {
@@ -1431,7 +1440,7 @@ export class FootyStatsService {
    */
   async getOver25Stats(): Promise<ServiceResponse<any>> {
     const startTime = Date.now();
-    const cacheKey = cacheKeys.over25Stats();
+    const cacheKey = 'footy:stats:over25';
 
     try {
       console.log('📈 Getting Over 2.5 goals stats...');
@@ -1454,7 +1463,7 @@ export class FootyStatsService {
 
       // Fetch from API
       console.log('🔍 Fetching Over 2.5 stats from API...');
-      const response = await DefaultService.getOver25Stats(API_KEY);
+      const response = await DefaultService.getOver25Stats({ key: API_KEY });
 
       if (!response?.data) {
         return {
