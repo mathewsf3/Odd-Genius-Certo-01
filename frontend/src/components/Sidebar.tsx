@@ -23,8 +23,8 @@ import { cn } from '../lib/utils';
 interface SidebarProps {
   collapsed: boolean;
   setCollapsed: (collapsed: boolean) => void;
-  currentPage: 'dashboard' | 'live' | 'magicui-test';
-  setCurrentPage: (page: 'dashboard' | 'live' | 'magicui-test') => void;
+  currentPage: 'dashboard' | 'live' | 'upcoming' | 'magicui-test';
+  setCurrentPage: (page: 'dashboard' | 'live' | 'upcoming' | 'magicui-test') => void;
 }
 
 const getNavigationItems = (currentPage: 'dashboard' | 'live' | 'magicui-test') => [

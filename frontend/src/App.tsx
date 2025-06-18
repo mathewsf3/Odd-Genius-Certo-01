@@ -50,6 +50,11 @@ function App() {
         return;
       }
 
+      if (path.includes('/proximas') || hash.includes('/proximas') || path.includes('/upcoming') || hash.includes('/upcoming')) {
+        setCurrentPage('upcoming');
+        return;
+      }
+
       if (path.includes('/magicui-test') || hash.includes('/magicui-test')) {
         setCurrentPage('magicui-test');
         return;
@@ -113,6 +118,9 @@ function App() {
       case 'live':
         console.log(`🎯 App.tsx - Renderizando LiveCenter`);
         return <LiveCenter onAnalyzeMatch={handleMatchAnalysis} />;
+      case 'upcoming':
+        console.log(`🎯 App.tsx - Renderizando UpcomingMatches`);
+        return <UpcomingMatches onAnalyzeMatch={handleMatchAnalysis} />;
       case 'magicui-test':
         console.log(`🎯 App.tsx - Renderizando MagicUITestPage`);
         return <MagicUITestPage />;
