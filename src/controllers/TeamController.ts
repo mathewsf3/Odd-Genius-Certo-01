@@ -71,7 +71,7 @@ export class TeamController {
 
         // 2. Cache miss - fetch from API
         logger.debug(`📡 Cache MISS: Fetching team data ${teamId} from API`);
-        const teamData = await DefaultService.getTeam(teamId, API_KEY);
+        const teamData = await DefaultService.getTeam({ teamId, key: API_KEY });
 
         // 3. Store in cache
         await this.cacheService.set(cacheKey, teamData, {
@@ -148,7 +148,7 @@ export class TeamController {
 
         // 2. Cache miss - fetch from API
         logger.debug(`📡 Cache MISS: Fetching team stats ${teamId} from API`);
-        const statsData = await DefaultService.getTeamLastXStats(teamId, API_KEY);
+        const statsData = await DefaultService.getTeamLastXStats({ teamId, key: API_KEY });
 
         // 3. Store in cache
         await this.cacheService.set(cacheKey, statsData, {

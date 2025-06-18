@@ -120,18 +120,7 @@ router.get('/upcoming', cacheMiddleware(300), async (req, res) => {
   }
 });
 
-/**
- * GET /api/v1/matches/upcoming/all
- * Get ALL upcoming matches in next 48 hours (for dedicated upcoming page)
- * Supports ?hours=48 parameter to customize time range
- * Cache: 5 minutes
- */
-router.get('/upcoming/all', cacheMiddleware(300), (req, res, next) => {
-  // Force no limit for all upcoming matches
-  req.query.limit = undefined;
-  req.query.status = 'upcoming';
-  matchController.searchMatches(req, res, next);
-});
+// Removed duplicate /upcoming/all endpoint - using the comprehensive one below
 
 /**
  * GET /api/v1/matches/dashboard
@@ -302,6 +291,10 @@ router.get('/dashboard', developmentRateLimit(300), async (req, res) => {
           14168: 'A-League (Australia)',
           14169: 'Thai League 1',
 
+          // Nordic Leagues
+          14089: 'Veikkausliiga',
+          14119: 'Ykkönen',
+
           // African Leagues
           14180: 'Egyptian Premier League',
           14181: 'South African Premier Division',
@@ -313,7 +306,12 @@ router.get('/dashboard', developmentRateLimit(300), async (req, res) => {
           14307: 'Torneo Nacional',
           14308: 'Liga Profissional',
           14309: 'Campeonato Nacional',
-          14310: 'Copa Nacional'
+          14310: 'Copa Nacional',
+
+          // eSports and Virtual Leagues
+          5874: 'eSports League',
+          5875: 'Virtual Football',
+          5876: 'FIFA Tournament'
         };
 
         return staticLeagueMap[seasonId] || `Liga ${seasonId}`;
@@ -326,30 +324,42 @@ router.get('/dashboard', developmentRateLimit(300), async (req, res) => {
         // ✅ REAL SCORES - Use actual goal counts from API
         homeGoalCount: match.homeGoalCount || 0,
         awayGoalCount: match.awayGoalCount || 0,
-        // ✅ COMPETITION INFORMATION - Add league name
+        // ✅ COMPETITION INFORMATION - Use league name mapping
         competition_id: match.competition_id || match.seasonID || 0,
-        competition_name: match.competition_name || getLeagueName(match.competition_id || match.seasonID || 0),
-        country_name: match.country_name || 'País não informado',
+        competition_name: getLeagueName(match.competition_id || match.seasonID || 0),
         // ✅ PRESERVE ORIGINAL FIELDS
         originalStatus: match.status
       };
     };
 
+    // ✅ DEDUPLICATION: Remove any matches that appear in both live and upcoming arrays
+    const liveMatchIds = new Set(allLiveMatches.map(match => match.id));
+    const deduplicatedUpcomingMatches = allUpcomingMatches.filter(match => !liveMatchIds.has(match.id));
+
+    logger.info(`🔄 Deduplication: ${allUpcomingMatches.length} upcoming -> ${deduplicatedUpcomingMatches.length} after removing ${allUpcomingMatches.length - deduplicatedUpcomingMatches.length} duplicates`);
+
+    // ✅ ADDITIONAL DEDUPLICATION: Remove duplicates within each array
+    const uniqueLiveMatches = allLiveMatches.filter((match, index, self) =>
+      index === self.findIndex(m => m.id === match.id)
+    );
+    const uniqueUpcomingMatches = deduplicatedUpcomingMatches.filter((match, index, self) =>
+      index === self.findIndex(m => m.id === match.id)
+    );
+
     // ✅ Dashboard display: Limit to 6 for layout purposes with normalized data
-    const liveMatches = allLiveMatches.slice(0, 6).map(match => normalizeMatchData(match, 'live'));
-    const upcomingMatches = allUpcomingMatches.slice(0, 6).map(match => normalizeMatchData(match, 'upcoming'));
+    const liveMatches = uniqueLiveMatches.slice(0, 6).map(match => normalizeMatchData(match, 'live'));
+    const upcomingMatches = uniqueUpcomingMatches.slice(0, 6).map(match => normalizeMatchData(match, 'upcoming'));
 
     const dashboardData = {
       liveMatches,
       upcomingMatches,
-      stats: {
-        totalMatches: allMatches.length,
-        liveMatches: allLiveMatches.length,        // REAL total live matches
-        upcomingMatches: allUpcomingMatches.length // REAL total upcoming matches (24h)
-      }
+      totalMatches: allMatches.length,
+      totalLive: uniqueLiveMatches.length,        // REAL total live matches
+      totalUpcoming: uniqueUpcomingMatches.length, // REAL total upcoming matches (24h)
+      lastUpdated: new Date().toISOString()
     };
 
-    logger.info(`📊 Dashboard data: ${allLiveMatches.length} total live, ${allUpcomingMatches.length} total upcoming (24h), showing ${liveMatches.length}/${upcomingMatches.length} on dashboard`);
+    logger.info(`📊 Dashboard data: ${uniqueLiveMatches.length} total live, ${uniqueUpcomingMatches.length} total upcoming (24h), showing ${liveMatches.length}/${upcomingMatches.length} on dashboard`);
     res.json({
       success: true,
       data: dashboardData,
@@ -613,6 +623,10 @@ router.get('/leagues/mapping', async (req, res) => {
       14168: 'A-League (Australia)',
       14169: 'Thai League 1',
 
+      // Nordic Leagues
+      14089: 'Veikkausliiga',
+      14119: 'Ykkönen',
+
       // African Leagues
       14180: 'Egyptian Premier League',
       14181: 'South African Premier Division',
@@ -624,7 +638,12 @@ router.get('/leagues/mapping', async (req, res) => {
       14307: 'Torneo Nacional',
       14308: 'Liga Profissional',
       14309: 'Campeonato Nacional',
-      14310: 'Copa Nacional'
+      14310: 'Copa Nacional',
+
+      // eSports and Virtual Leagues
+      5874: 'eSports League',
+      5875: 'Virtual Football',
+      5876: 'FIFA Tournament'
     };
 
     logger.info(`✅ Returning mapping for ${Object.keys(staticLeagueMap).length} leagues`);
@@ -776,6 +795,298 @@ router.get('/:id', cacheMiddleware(600), (req, res, next) => {
  */
 router.get('/:id/analysis', cacheMiddleware(900), (req, res, next) => {
   matchController.getMatchAnalysis(req, res, next);
+});
+
+/**
+ * GET /api/v1/matches/:id/h2h
+ * Get Head-to-Head analysis for teams in a match
+ * Supports ?range=5 or ?range=10 for last X matches
+ * Cache: 30 minutes
+ */
+router.get('/:id/h2h', cacheMiddleware(1800), async (req, res) => {
+  try {
+    const matchId = parseInt(req.params.id);
+    const range = parseInt(req.query.range as string) || 5;
+
+    if (isNaN(matchId) || matchId <= 0) {
+      res.status(400).json({
+        success: false,
+        error: 'Invalid match ID'
+      });
+      return;
+    }
+
+    if (range !== 5 && range !== 10) {
+      res.status(400).json({
+        success: false,
+        error: 'Range must be 5 or 10'
+      });
+      return;
+    }
+
+    logger.info(`🎯 Getting H2H analysis for match ${matchId} (last ${range} matches)`);
+
+    // First get match details to get team IDs
+    const { matchAnalysisService } = await import('../../services/MatchAnalysisService');
+    const matchDetails = await matchAnalysisService.getDetailedMatchInfo(matchId);
+
+    if (!matchDetails.success || !matchDetails.data) {
+      res.status(404).json({
+        success: false,
+        error: 'Match not found'
+      });
+      return;
+    }
+
+    const match = matchDetails.data.matchDetails;
+    const homeId = match.homeID;
+    const awayId = match.awayID;
+
+    // Get H2H analysis
+    const h2hResult = await matchAnalysisService.getH2HAnalysis({
+      homeId,
+      awayId,
+      range: range as 5 | 10
+    });
+
+    if (!h2hResult.success) {
+      res.status(502).json({
+        success: false,
+        error: h2hResult.error || 'Failed to get H2H analysis'
+      });
+      return;
+    }
+
+    res.json({
+      success: true,
+      data: h2hResult.data,
+      metadata: {
+        matchId,
+        homeId,
+        awayId,
+        range,
+        timestamp: new Date().toISOString(),
+        source: 'footystats-api'
+      }
+    });
+
+  } catch (error) {
+    logger.error('❌ Error getting H2H analysis:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get H2H analysis',
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
+ * GET /api/v1/matches/:id/corners
+ * Get corner analysis for teams in a match
+ * Supports ?range=5 or ?range=10 for last X matches
+ * Cache: 30 minutes
+ */
+router.get('/:id/corners', cacheMiddleware(1800), async (req, res) => {
+  try {
+    const matchId = parseInt(req.params.id);
+    const range = parseInt(req.query.range as string) || 5;
+
+    if (isNaN(matchId) || matchId <= 0) {
+      res.status(400).json({
+        success: false,
+        error: 'Invalid match ID'
+      });
+      return;
+    }
+
+    if (range !== 5 && range !== 10) {
+      res.status(400).json({
+        success: false,
+        error: 'Range must be 5 or 10'
+      });
+      return;
+    }
+
+    logger.info(`🎯 Getting corner analysis for match ${matchId} (last ${range} matches)`);
+
+    const { matchAnalysisService } = await import('../../services/MatchAnalysisService');
+    const cornerResult = await matchAnalysisService.getCornerAnalysis({
+      matchId,
+      range: range as 5 | 10
+    });
+
+    if (!cornerResult.success) {
+      res.status(502).json({
+        success: false,
+        error: cornerResult.error || 'Failed to get corner analysis'
+      });
+      return;
+    }
+
+    res.json({
+      success: true,
+      data: cornerResult.data,
+      metadata: {
+        matchId,
+        range,
+        timestamp: new Date().toISOString(),
+        source: 'footystats-api'
+      }
+    });
+
+  } catch (error) {
+    logger.error('❌ Error getting corner analysis:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get corner analysis',
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
+ * GET /api/v1/matches/:id/goals
+ * Get goal analysis for teams in a match
+ * Supports ?range=5 or ?range=10 for last X matches
+ * Cache: 30 minutes
+ */
+router.get('/:id/goals', cacheMiddleware(1800), async (req, res) => {
+  try {
+    const matchId = parseInt(req.params.id);
+    const range = parseInt(req.query.range as string) || 5;
+
+    if (isNaN(matchId) || matchId <= 0) {
+      res.status(400).json({
+        success: false,
+        error: 'Invalid match ID'
+      });
+      return;
+    }
+
+    if (range !== 5 && range !== 10) {
+      res.status(400).json({
+        success: false,
+        error: 'Range must be 5 or 10'
+      });
+      return;
+    }
+
+    logger.info(`🎯 Getting goal analysis for match ${matchId} (last ${range} matches)`);
+
+    const { matchAnalysisService } = await import('../../services/MatchAnalysisService');
+    const goalResult = await matchAnalysisService.getGoalAnalysis({
+      matchId,
+      range: range as 5 | 10
+    });
+
+    if (!goalResult.success) {
+      res.status(502).json({
+        success: false,
+        error: goalResult.error || 'Failed to get goal analysis'
+      });
+      return;
+    }
+
+    res.json({
+      success: true,
+      data: goalResult.data,
+      metadata: {
+        matchId,
+        range,
+        timestamp: new Date().toISOString(),
+        source: 'footystats-api'
+      }
+    });
+
+  } catch (error) {
+    logger.error('❌ Error getting goal analysis:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get goal analysis',
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
+ * GET /api/v1/matches/:id/overview
+ * Get comprehensive overview data for the "Visão Geral" tab
+ * Aggregates H2H, form, statistics, and predictions
+ * Cache: Smart caching (1min live, 30min upcoming, 24h finished)
+ */
+router.get('/:id/overview', async (req, res) => {
+  try {
+    const matchId = parseInt(req.params.id);
+
+    if (isNaN(matchId) || matchId <= 0) {
+      res.status(400).json({
+        success: false,
+        error: 'Invalid match ID'
+      });
+      return;
+    }
+
+    // Smart caching based on match status
+    const cacheKey = `match:${matchId}:overview:v2`;
+
+    logger.info(`🎯 Getting comprehensive overview for match ${matchId} with smart caching`);
+
+    const { matchAnalysisService } = await import('../../services/MatchAnalysisService');
+    const overviewResult = await matchAnalysisService.getMatchOverviewData(matchId);
+
+    if (!overviewResult.success) {
+      res.status(502).json({
+        success: false,
+        error: overviewResult.error || 'Failed to get match overview'
+      });
+      return;
+    }
+
+    // Determine cache TTL based on match status
+    const matchStatus = overviewResult.data?.matchInfo?.status || 'default';
+    let cacheTTL = 1800; // 30 minutes default
+
+    if (matchStatus.includes('live') || matchStatus.includes('ao-vivo')) {
+      cacheTTL = 60; // 1 minute for live matches
+    } else if (matchStatus.includes('finished') || matchStatus.includes('finalizada')) {
+      cacheTTL = 86400; // 24 hours for finished matches
+    } else if (matchStatus.includes('upcoming') || matchStatus.includes('em-breve')) {
+      cacheTTL = 1800; // 30 minutes for upcoming matches
+    }
+
+    const responseData = {
+      success: true,
+      data: overviewResult.data,
+      metadata: {
+        matchId,
+        timestamp: new Date().toISOString(),
+        source: 'footystats-api',
+        analysisType: 'comprehensive-overview',
+        cacheStrategy: {
+          ttl: cacheTTL,
+          status: matchStatus,
+          cacheKey
+        }
+      }
+    };
+
+    // Set cache headers for client-side caching
+    res.set({
+      'Cache-Control': `public, max-age=${cacheTTL}`,
+      'ETag': `"${matchId}-${Date.now()}"`,
+      'Last-Modified': new Date().toUTCString()
+    });
+
+    res.json(responseData);
+
+  } catch (error) {
+    logger.error('❌ Error getting match overview:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get match overview',
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
 });
 
 /**

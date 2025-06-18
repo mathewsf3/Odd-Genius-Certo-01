@@ -1,45 +1,62 @@
 /**
- * 🎯 LAYOUT COMPONENT - MAIN APP STRUCTURE
+ * 🎯 Layout Component - Main Application Layout
  * 
- * ✅ Sidebar navigation
- * ✅ Main content area
- * ✅ Responsive design
- * ✅ Portuguese-BR interface
- * ✅ Green/white theme
+ * Provides consistent layout structure with sidebar navigation
+ * Portuguese-BR interface with green/white theme
+ * Responsive design for mobile and desktop
  */
 
-import React from 'react';
+'use client';
+
+import React, { useState } from 'react';
 import Sidebar from './Sidebar';
+import Header from './Header';
 
 interface LayoutProps {
   children: React.ReactNode;
-  sidebarCollapsed: boolean;
-  setSidebarCollapsed: (collapsed: boolean) => void;
-  currentPage: 'dashboard' | 'live' | 'magicui-test';
-  setCurrentPage: (page: 'dashboard' | 'live' | 'magicui-test') => void;
+  currentPage?: string;
+  className?: string;
 }
 
-const Layout: React.FC<LayoutProps> = ({
-  children,
-  sidebarCollapsed,
-  setSidebarCollapsed,
-  currentPage,
-  setCurrentPage
-}) => {
+export default function Layout({ children, currentPage = 'dashboard', className = '' }: LayoutProps) {
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className={`min-h-screen bg-gray-50 ${className}`}>
+      {/* Mobile menu overlay */}
+      {mobileMenuOpen && (
+        <div 
+          className="fixed inset-0 z-40 bg-black bg-opacity-50 lg:hidden"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* Sidebar */}
       <Sidebar
         collapsed={sidebarCollapsed}
-        setCollapsed={setSidebarCollapsed}
+        mobileMenuOpen={mobileMenuOpen}
         currentPage={currentPage}
-        setCurrentPage={setCurrentPage}
+        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+        onCloseMobileMenu={() => setMobileMenuOpen(false)}
       />
 
-      <main className="flex-1 overflow-auto">
-        {children}
-      </main>
+      {/* Main content area */}
+      <div className={`transition-all duration-300 ${
+        sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'
+      }`}>
+        {/* Header */}
+        <Header
+          onToggleMobileMenu={() => setMobileMenuOpen(!mobileMenuOpen)}
+          onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
+          sidebarCollapsed={sidebarCollapsed}
+        />
+
+        {/* Page content */}
+        <main className="min-h-screen">
+          {children}
+        </main>
+      </div>
     </div>
   );
-};
-
-export default Layout;
+}

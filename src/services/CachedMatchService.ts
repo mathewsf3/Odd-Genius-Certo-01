@@ -264,7 +264,8 @@ export class CachedMatchService {
    * 🎯 Get live matches with short-term caching
    */
   async getLiveMatches(limit?: number): Promise<any[]> {
-    const cacheKey = cacheKeys.matches.live(limit);
+    // Create cache key manually to avoid import issues
+    const cacheKey = `footy:matches:live${limit ? `:limit:${limit}` : ''}`;
     const strategy = getCacheStrategy('LIVE_MATCHES');
     
     try {
@@ -300,7 +301,8 @@ export class CachedMatchService {
    * 🎯 Get upcoming matches with caching
    */
   async getUpcomingMatches(limit?: number, hours: number = 48): Promise<any[]> {
-    const cacheKey = cacheKeys.matches.upcoming(limit, hours);
+    // Create cache key manually to avoid import issues
+    const cacheKey = `footy:matches:upcoming${limit ? `:limit:${limit}` : ''}:${hours || 48}h`;
     const strategy = getCacheStrategy('UPCOMING_MATCHES');
     
     try {
@@ -336,7 +338,8 @@ export class CachedMatchService {
    * 🎯 Get total match count with caching
    */
   async getTotalMatchCount(date?: string): Promise<{ totalMatches: number; success: boolean }> {
-    const cacheKey = cacheKeys.matches.totalCount(date);
+    // Create cache key manually to avoid import issues
+    const cacheKey = `footy:matches:total-count:${date || 'current'}`;
     const strategy = getCacheStrategy('TODAY_MATCHES');
     
     try {

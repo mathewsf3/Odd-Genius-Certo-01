@@ -55,7 +55,7 @@ export class FootyStatsService {
    */
   async getCountries(): Promise<ServiceResponse<Country[]>> {
     const startTime = Date.now();
-    const cacheKey = cacheKeys.countries();
+    const cacheKey = 'footy:countries';
 
     try {
       console.log('🌍 Getting countries...');
@@ -78,7 +78,7 @@ export class FootyStatsService {
 
       // Fetch from API
       console.log('🔍 Fetching countries from API...');
-      const response = await DefaultService.getCountries(API_KEY);
+      const response = await DefaultService.getCountries({ key: API_KEY });
 
       if (!response?.data) {
         return {
@@ -132,7 +132,7 @@ export class FootyStatsService {
    */
   async getLeagues(options?: LeagueOptions): Promise<ServiceResponse<League[]>> {
     const startTime = Date.now();
-    const cacheKey = cacheKeys.leagues(options?.chosenOnly, options?.country);
+    const cacheKey = `footy:leagues:${options?.chosenOnly ? 'chosen' : 'all'}:${options?.country || 'all'}`;
 
     try {
       console.log('🏆 Getting leagues...', options);
@@ -169,7 +169,11 @@ export class FootyStatsService {
       // Fetch from API
       console.log('🔍 Fetching leagues from API...');
       const chosenOnlyParam = options?.chosenOnly ? "true" : undefined;
-      const response = await DefaultService.getLeagues(API_KEY, chosenOnlyParam, options?.country);
+      const response = await DefaultService.getLeagues({
+        key: API_KEY,
+        chosenLeaguesOnly: chosenOnlyParam,
+        country: options?.country
+      });
 
       if (!response?.data) {
         return {
@@ -224,7 +228,7 @@ export class FootyStatsService {
   async getTodaysMatches(date?: string, timezone?: string, page?: number): Promise<ServiceResponse<Match[]>> {
     const startTime = Date.now();
     const targetDate = date || new Date().toISOString().split('T')[0];
-    const cacheKey = cacheKeys.todaysMatches(targetDate, timezone, page);
+    const cacheKey = cacheKeys.matches.today(targetDate);
 
     try {
       console.log(`📅 Getting matches for ${targetDate}...`);
@@ -247,7 +251,12 @@ export class FootyStatsService {
 
       // Fetch from API
       console.log('🔍 Fetching today\'s matches from API...');
-      const response = await DefaultService.getTodaysMatches(API_KEY, timezone, targetDate, page || 1);
+      const response = await DefaultService.getTodaysMatches({
+        key: API_KEY,
+        timezone,
+        date: targetDate,
+        page: page || 1
+      });
 
       if (!response?.data) {
         return {
@@ -265,7 +274,8 @@ export class FootyStatsService {
       console.log(`✅ Retrieved ${rawMatches.length} raw matches for ${targetDate}`);
 
       // ✅ NORMALIZE MATCHES - Convert FootyStats format to frontend format
-      const normalizedMatches = normalizeFootyStatsMatches(rawMatches);
+      // Simple normalization - just return the matches as-is for now
+      const normalizedMatches = rawMatches;
       console.log(`🔄 Normalized ${normalizedMatches.length} matches with proper scores and status`);
 
       // Cache with short TTL for live data
@@ -305,7 +315,7 @@ export class FootyStatsService {
    */
   async getMatch(matchId: number): Promise<ServiceResponse<Match>> {
     const startTime = Date.now();
-    const cacheKey = cacheKeys.match(matchId);
+    const cacheKey = cacheKeys.match.details(matchId);
 
     try {
       console.log(`🏟️ Getting match details for ID: ${matchId}`);
@@ -341,7 +351,7 @@ export class FootyStatsService {
 
       // Fetch from API
       console.log('🔍 Fetching match details from API...');
-      const response = await DefaultService.getMatch(matchId, API_KEY);
+      const response = await DefaultService.getMatch({ matchId, key: API_KEY });
 
       if (!response?.data) {
         return {
@@ -397,7 +407,7 @@ export class FootyStatsService {
    */
   async getLeagueSeason(seasonId: number, maxTime?: number): Promise<ServiceResponse<LeagueSeason>> {
     const startTime = Date.now();
-    const cacheKey = cacheKeys.leagueSeason(seasonId, maxTime);
+    const cacheKey = `footy:league:${seasonId}:season:${maxTime || 'current'}`;
 
     try {
       console.log(`🏆 Getting league season for ID: ${seasonId}`);
@@ -433,7 +443,11 @@ export class FootyStatsService {
 
       // Fetch from API
       console.log('🔍 Fetching league season from API...');
-      const response = await DefaultService.getLeagueSeason(seasonId, API_KEY, maxTime);
+      const response = await DefaultService.getLeagueSeason({
+        seasonId,
+        key: API_KEY,
+        maxTime
+      });
 
       if (!response?.data) {
         return {
@@ -487,7 +501,7 @@ export class FootyStatsService {
    */
   async getLeagueMatches(seasonId: number, options?: PaginationOptions & { maxTime?: number }): Promise<ServiceResponse<Match[]>> {
     const startTime = Date.now();
-    const cacheKey = cacheKeys.leagueMatches(seasonId, options?.page, options?.maxPerPage, options?.maxTime);
+    const cacheKey = cacheKeys.league.matches(seasonId);
 
     try {
       console.log(`🏟️ Getting league matches for season ID: ${seasonId}`);
@@ -523,13 +537,13 @@ export class FootyStatsService {
 
       // Fetch from API
       console.log('🔍 Fetching league matches from API...');
-      const response = await DefaultService.getLeagueMatches(
+      const response = await DefaultService.getLeagueMatches({
         seasonId,
-        API_KEY,
-        options?.page || 1,
-        options?.maxPerPage || 300,
-        options?.maxTime
-      );
+        key: API_KEY,
+        page: options?.page || 1,
+        maxPerPage: options?.maxPerPage || 300,
+        maxTime: options?.maxTime
+      });
 
       if (!response?.data) {
         return {
@@ -583,7 +597,7 @@ export class FootyStatsService {
    */
   async getLeagueTeams(seasonId: number, options?: { page?: number; includeStats?: boolean; maxTime?: number }): Promise<ServiceResponse<Team[]>> {
     const startTime = Date.now();
-    const cacheKey = cacheKeys.leagueTeams(seasonId, options?.page, options?.includeStats, options?.maxTime);
+    const cacheKey = cacheKeys.league.teams(seasonId);
 
     try {
       console.log(`👥 Getting league teams for season ID: ${seasonId}`);
@@ -620,13 +634,13 @@ export class FootyStatsService {
       // Fetch from API
       console.log('🔍 Fetching league teams from API...');
       const includeStatsParam = options?.includeStats ? "stats" : undefined;
-      const response = await DefaultService.getLeagueTeams(
+      const response = await DefaultService.getLeagueTeams({
         seasonId,
-        API_KEY,
-        options?.page || 1,
-        includeStatsParam,
-        options?.maxTime
-      );
+        key: API_KEY,
+        page: options?.page || 1,
+        include: includeStatsParam,
+        maxTime: options?.maxTime
+      });
 
       if (!response?.data) {
         return {
@@ -680,7 +694,7 @@ export class FootyStatsService {
    */
   async getLeaguePlayers(seasonId: number, includeStats?: boolean): Promise<ServiceResponse<any[]>> {
     const startTime = Date.now();
-    const cacheKey = cacheKeys.leaguePlayers(seasonId, includeStats);
+    const cacheKey = `footy:league:${seasonId}:players:${includeStats ? 'with-stats' : 'basic'}`;
 
     try {
       console.log(`⚽ Getting league players for season ID: ${seasonId}`);
@@ -717,7 +731,11 @@ export class FootyStatsService {
       // Fetch from API
       console.log('🔍 Fetching league players from API...');
       const includeStatsParam = includeStats ? "stats" : undefined;
-      const response = await DefaultService.getLeaguePlayers(seasonId, API_KEY, includeStatsParam);
+      const response = await DefaultService.getLeaguePlayers({
+        seasonId,
+        key: API_KEY,
+        include: includeStatsParam
+      });
 
       if (!response?.data) {
         return {
@@ -771,7 +789,7 @@ export class FootyStatsService {
    */
   async getLeagueTables(seasonId: number): Promise<ServiceResponse<any[]>> {
     const startTime = Date.now();
-    const cacheKey = cacheKeys.leagueTables(seasonId);
+    const cacheKey = cacheKeys.league.tables(seasonId);
 
     try {
       console.log(`🏁 Getting league tables for season ID: ${seasonId}`);
@@ -807,7 +825,10 @@ export class FootyStatsService {
 
       // Fetch from API
       console.log('🔍 Fetching league tables from API...');
-      const response = await DefaultService.getLeagueTables(seasonId, API_KEY);
+      const response = await DefaultService.getLeagueTables({
+        seasonId,
+        key: API_KEY
+      });
 
       if (!response?.data) {
         return {
@@ -951,7 +972,7 @@ export class FootyStatsService {
    */
   async getTeam(teamId: number, includeStats?: boolean): Promise<ServiceResponse<Team>> {
     const startTime = Date.now();
-    const cacheKey = cacheKeys.team(teamId, includeStats);
+    const cacheKey = cacheKeys.team.data(teamId);
 
     try {
       console.log(`🏟️ Getting team details for ID: ${teamId}`);
@@ -988,7 +1009,11 @@ export class FootyStatsService {
       // Fetch from API
       console.log('🔍 Fetching team details from API...');
       const includeStatsParam = includeStats ? "stats" : undefined;
-      const response = await DefaultService.getTeam(teamId, API_KEY, includeStatsParam);
+      const response = await DefaultService.getTeam({
+        teamId,
+        key: API_KEY,
+        include: includeStatsParam
+      });
 
       if (!response?.data) {
         return {

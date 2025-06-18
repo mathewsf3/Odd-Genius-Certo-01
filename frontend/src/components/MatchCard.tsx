@@ -1,281 +1,280 @@
 /**
- * 🎯 MATCH CARD COMPONENT - REAL API DATA
+ * 🎯 MatchCard Component - Enhanced Match Display
  * 
- * ✅ ZERO hardcoded data
- * ✅ Portuguese-BR interface
- * ✅ Green/White theme
- * ✅ Vite React compatibility
+ * Displays match information with proper styling and interaction
+ * Supports live, upcoming, and finished match states
+ * Portuguese-BR interface with green/white theme
  */
 
-import { motion } from "framer-motion";
-import { Calendar, Clock, MapPin, Trophy } from "lucide-react";
-import React from "react";
-import { cn } from "../lib/utils";
+'use client';
 
-// ✅ REAL API DATA INTERFACES - Updated for FootyStats API
-interface MatchData {
-  id: number;
-  homeID: number;
-  awayID: number;
-  home_name: string;
-  away_name: string;
-  home_image: string;
-  away_image: string;
-  homeGoalCount: number;
-  awayGoalCount: number;
-  status: string;
-  date_unix: number;
-  stadium_name?: string;
-  stadium_location?: string;
-  competition_id?: number;
-  competition_name?: string;
-  country_name?: string;
-  match_url?: string;
-}
+import { formatMatchTime, getMatchStatusText, isMatchLive, isMatchUpcoming } from '@/services/api';
+import { Match } from '@/types/api';
+import Image from 'next/image';
+import React from 'react';
 
 interface MatchCardProps {
-  match: MatchData;
+  match: Match;
+  onAnalyzeMatch?: (matchId: number) => void;
+  showAnalysisButton?: boolean;
   className?: string;
-  mostrarEstatisticas?: boolean;
-  mostrarOdds?: boolean;
-  animado?: boolean;
-  onAnalisarPartida?: (matchId: number) => void;
 }
 
-const getStatusConfig = (status: string) => {
-  // ✅ ENHANCED STATUS MAPPING - Including FootyStats live statuses
-  const normalizedStatus = status.toLowerCase();
-  const statusMap: { [key: string]: { label: string; className: string; icon: string } } = {
-    // Live matches - All FootyStats live statuses
-    'live': { label: 'AO VIVO', className: 'bg-red-500 text-white animate-pulse', icon: '🔴' },
-    'inplay': { label: 'AO VIVO', className: 'bg-red-500 text-white animate-pulse', icon: '🔴' },
-    '1st half': { label: 'AO VIVO', className: 'bg-red-500 text-white animate-pulse', icon: '🔴' },
-    '2nd half': { label: 'AO VIVO', className: 'bg-red-500 text-white animate-pulse', icon: '🔴' },
-    'ht': { label: 'INTERVALO', className: 'bg-orange-500 text-white animate-pulse', icon: '⏸️' },
-    'et': { label: 'PRORROGAÇÃO', className: 'bg-red-600 text-white animate-pulse', icon: '🔴' },
-    'penalties': { label: 'PÊNALTIS', className: 'bg-purple-500 text-white animate-pulse', icon: '⚽' },
-    'incomplete': { label: 'AO VIVO', className: 'bg-red-500 text-white animate-pulse', icon: '🔴' },
-
-    // Upcoming matches
-    'upcoming': { label: 'EM BREVE', className: 'bg-yellow-100 text-yellow-800', icon: '⏰' },
-    'not_started': { label: 'EM BREVE', className: 'bg-yellow-100 text-yellow-800', icon: '⏰' },
-    'ns': { label: 'EM BREVE', className: 'bg-yellow-100 text-yellow-800', icon: '⏰' },
-    'scheduled': { label: 'EM BREVE', className: 'bg-yellow-100 text-yellow-800', icon: '⏰' },
-    'kick off': { label: 'EM BREVE', className: 'bg-yellow-100 text-yellow-800', icon: '⏰' },
-    'tbd': { label: 'A DEFINIR', className: 'bg-gray-100 text-gray-800', icon: '❓' },
-
-    // Finished matches
-    'finished': { label: 'FINALIZADA', className: 'bg-gray-500 text-white', icon: '✅' },
-    'complete': { label: 'FINALIZADA', className: 'bg-gray-500 text-white', icon: '✅' },
-    'ft': { label: 'FINALIZADA', className: 'bg-gray-500 text-white', icon: '✅' },
-
-    // Special cases
-    'postponed': { label: 'ADIADA', className: 'bg-yellow-500 text-black', icon: '⚠️' },
-    'cancelled': { label: 'CANCELADA', className: 'bg-red-100 text-red-800', icon: '❌' },
-    'suspended': { label: 'SUSPENSA', className: 'bg-red-200 text-red-900', icon: '⛔' }
+export default function MatchCard({ 
+  match, 
+  onAnalyzeMatch, 
+  showAnalysisButton = true,
+  className = '' 
+}: MatchCardProps) {
+  
+  const isLive = isMatchLive(match);
+  const isUpcoming = isMatchUpcoming(match);
+  
+  // ✅ GET TEAM DATA - Following requirements A5 priority order
+  const homeTeam = {
+    id: match.home?.id || match.homeID,
+    name: match.home?.name || match.home_name || 'Time Casa',
+    logo: getLogo(match.home?.logo || match.home_image),
+    score: getValidScore(match.home?.score ?? match.homeGoalCount),
   };
 
-  return statusMap[normalizedStatus] || { label: 'EM BREVE', className: 'bg-yellow-100 text-yellow-800', icon: '⏰' };
-};
+  const awayTeam = {
+    id: match.away?.id || match.awayID,
+    name: match.away?.name || match.away_name || 'Time Visitante',
+    logo: getLogo(match.away?.logo || match.away_image),
+    score: getValidScore(match.away?.score ?? match.awayGoalCount),
+  };
 
-// ✅ UTILITY FUNCTION FOR LOGO URL HANDLING
-const buildLogoUrl = (imagePath: string | null | undefined, teamId: number): string => {
-  // If empty → return placeholder
-  if (!imagePath || imagePath === 'null' || imagePath.trim() === '') {
-    return '/default-team.svg';
+  // Helper functions for data validation
+  function getValidScore(score: unknown): number {
+    const numScore = Number(score);
+    return isNaN(numScore) ? 0 : numScore;
   }
 
-  // If already absolute (http/https) → ensure https
-  if (imagePath.startsWith('http')) {
-    return imagePath.replace('http://', 'https://');
+  // ✅ LOGO VALIDATION - Following requirements A4 & A5
+  function getLogo(url?: string): string | null {
+    if (!url) return null;
+
+    // If it's already a full URL, return it
+    if (/^(https?:)?\/\//.test(url)) return url;
+
+    // Handle FootyStats relative paths - prepend domain
+    return `https://footystats.org/${url.replace(/^\/*/, '')}`;
   }
 
-  // Use new CDN: https://cdn.footystats.org/img/
-  return `https://cdn.footystats.org/img/${imagePath}`;
-};
 
-// ✅ UTILITY FUNCTION TO DETERMINE IF SCORE SHOULD BE SHOWN
-const shouldShowScore = (status: string): boolean => {
-  const normalizedStatus = status.toLowerCase();
-  const scoreStatuses = [
-    'live', 'inplay', '1st half', '2nd half', 'ht', 'et', 'penalties',
-    'incomplete', 'finished', 'complete', 'ft', 'suspended'
-  ];
-  return scoreStatuses.includes(normalizedStatus);
-};
+  
+  // League name mapping for better display
+  const getLeagueName = (competitionId: number, competitionName: string): string => {
+    const leagueMap: { [key: number]: string } = {
+      // Major European Leagues
+      14124: 'Premier League',
+      14125: 'La Liga',
+      14126: 'Serie A',
+      14127: 'Bundesliga',
+      14128: 'Ligue 1',
+      14131: 'Eredivisie',
+      14132: 'Primeira Liga',
+      14133: 'Scottish Premiership',
+      14134: 'Belgian Pro League',
+      14089: 'Veikkausliiga', // Finnish league
+      14119: 'Ykkönen', // Finnish second division
+      14360: 'A Lyga', // Lithuanian league
+      12937: 'Linafoot', // Congo DR league
 
-const MatchCard: React.FC<MatchCardProps> = ({
-  match,
-  className,
-  animado = true,
-  onAnalisarPartida
-}) => {
-  const statusConfig = getStatusConfig(match.status);
+      // International Competitions
+      14100: 'UEFA Champions League',
+      14101: 'UEFA Europa League',
+      14102: 'UEFA Conference League',
 
-  const formatDate = () => {
-    if (match.date_unix) {
-      const date = new Date(match.date_unix * 1000);
-      const today = new Date();
-      if (date.toDateString() === today.toDateString()) return 'Hoje';
-      return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+      // Other leagues
+      5874: 'eSports League', // eSports matches
+    };
+
+    return leagueMap[competitionId] || competitionName || 'Liga';
+  };
+
+  // Get league information with proper name mapping
+  const league = {
+    id: match.league?.id || match.competition_id,
+    name: getLeagueName(match.competition_id || 0, match.league?.name || match.competition_name || ''),
+  };
+  
+  // Status styling
+  const getStatusStyle = () => {
+    if (isLive) {
+      return 'bg-red-100 text-red-800 border-red-200';
+    } else if (isUpcoming) {
+      return 'bg-blue-100 text-blue-800 border-blue-200';
+    } else {
+      return 'bg-gray-100 text-gray-800 border-gray-200';
     }
-    return 'Data não informada';
   };
+  
+  // ✅ LIVE SCORE LOGIC - Following requirements A1 & A2
+  const getScoreDisplay = () => {
+    if (isLive) {
+      // Priority order for live scores as per requirements
+      let homeScore = 0;
+      let awayScore = 0;
 
-  const formatTime = () => {
-    if (match.date_unix) {
-      return new Date(match.date_unix * 1000).toLocaleTimeString('pt-BR', {
-        hour: '2-digit',
-        minute: '2-digit'
-      });
+      // Check for live override first
+      const matchWithLiveScore = match as { liveScore?: { home?: number; away?: number } };
+      if (matchWithLiveScore.liveScore?.home !== undefined && matchWithLiveScore.liveScore?.away !== undefined) {
+        homeScore = getValidScore(matchWithLiveScore.liveScore.home);
+        awayScore = getValidScore(matchWithLiveScore.liveScore.away);
+      }
+      // Fallback to homeGoalCount/awayGoalCount
+      else if (match.homeGoalCount !== undefined && match.awayGoalCount !== undefined) {
+        homeScore = getValidScore(match.homeGoalCount);
+        awayScore = getValidScore(match.awayGoalCount);
+      }
+      // Additional fallback sources
+      else {
+        const matchWithScores = match as { score_home?: number; score_away?: number };
+        homeScore = getValidScore(matchWithScores.score_home ?? homeTeam.score);
+        awayScore = getValidScore(matchWithScores.score_away ?? awayTeam.score);
+      }
+
+      return `${homeScore} x ${awayScore}`;
     }
-    return 'Horário não informado';
+
+    // For finished matches, show final score
+    if (match.status === 'finished') {
+      const homeScore = getValidScore(match.homeGoalCount ?? homeTeam.score);
+      const awayScore = getValidScore(match.awayGoalCount ?? awayTeam.score);
+      return `${homeScore} x ${awayScore}`;
+    }
+
+    // For upcoming matches, show 'vs'
+    return 'vs';
   };
-
-  const cardVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: { opacity: 1, y: 0 },
-    hover: { y: -5, scale: 1.02 }
+  
+  const handleAnalyzeClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onAnalyzeMatch) {
+      onAnalyzeMatch(match.id);
+    }
   };
-
-  const CardComponent = animado ? motion.div : 'div';
-
+  
   return (
-    <CardComponent
-      className={cn(
-        "relative w-full max-w-md mx-auto bg-gradient-to-br from-white to-green-50",
-        "border-2 border-green-200 rounded-2xl shadow-lg hover:shadow-xl",
-        "transition-all duration-300 overflow-hidden", className
-      )}
-      variants={animado ? cardVariants : undefined}
-      initial={animado ? "hidden" : undefined}
-      animate={animado ? "visible" : undefined}
-      whileHover={animado ? "hover" : undefined}
-    >
-      {/* Header */}
-      <div className="relative p-4 border-b border-green-200">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Trophy className="w-4 h-4 text-green-600" />
-            <span className="text-sm font-medium text-green-700 truncate max-w-[200px]">
-              {match.competition_name || `Liga ${match.competition_id || 'N/A'}`} • {formatDate()}
-            </span>
-          </div>
-          <div className={cn(
-            "px-3 py-1 rounded-full text-xs font-bold",
-            statusConfig.className,
-            match.status === 'incomplete' && "animate-pulse"
-          )}>
-            {`${statusConfig.icon} ${statusConfig.label}`}
-          </div>
+    <div className={`bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200 border border-gray-200 ${className} ${isLive ? 'ring-2 ring-red-200' : ''}`}>
+      {/* Header with League and Status */}
+      <div className="px-4 py-2 border-b border-gray-100 flex justify-between items-center">
+        <div className="text-sm text-gray-600 truncate flex items-center">
+          {isLive && (
+            <div className="w-2 h-2 bg-red-500 rounded-full mr-2 animate-pulse"></div>
+          )}
+          {league.name}
+        </div>
+        <div className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusStyle()}`}>
+          {getMatchStatusText(match)}
         </div>
       </div>
-
-      {/* Teams and Score */}
-      <div className="relative p-6">
+      
+      {/* Main Match Content */}
+      <div className="p-4">
         <div className="flex items-center justify-between">
           {/* Home Team */}
-          <div className="flex flex-col items-center space-y-2 flex-1">
-            <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-green-200 bg-white">
-              <img
-                src={buildLogoUrl(match.home_image, match.homeID)}
-                alt={match.home_name}
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  const target = e.currentTarget as HTMLImageElement;
-                  // 1st fallback: try CDN generic by ID
-                  target.onerror = () => {
-                    // 2nd fallback: placeholder local
-                    target.src = '/default-team.svg';
-                  };
-                  target.src = `https://cdn.footystats.org/img/team-logo/${match.homeID}.png`;
-                }}
-                loading="lazy"
-              />
+          <div className="flex-1 flex items-center space-x-3">
+            <div className="relative w-8 h-8 flex-shrink-0 bg-gray-100 rounded-full flex items-center justify-center">
+              {homeTeam.logo ? (
+                <Image
+                  src={homeTeam.logo}
+                  alt={`${homeTeam.name} logo`}
+                  width={32}
+                  height={32}
+                  className="object-contain rounded-full"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    const parent = target.parentElement;
+                    if (parent) {
+                      parent.innerHTML = `<span class="text-xs font-bold text-gray-500">${homeTeam.name.charAt(0).toUpperCase()}</span>`;
+                    }
+                  }}
+                  unoptimized={true}
+                />
+              ) : (
+                <span className="text-xs font-bold text-gray-500">
+                  {homeTeam.name.charAt(0).toUpperCase()}
+                </span>
+              )}
             </div>
-            <h3 className="text-sm font-bold text-center text-gray-900">{match.home_name}</h3>
-            <span className="text-xs font-medium text-green-600 bg-green-100 px-2 py-1 rounded-full">CASA</span>
-          </div>
-
-          {/* Score */}
-          <div className="flex flex-col items-center space-y-2 px-4">
-            {shouldShowScore(match.status) ? (
-              <div className="flex items-center space-x-4">
-                <span className="text-3xl font-bold text-green-600">
-                  {match.homeGoalCount != null ? match.homeGoalCount : 0}
-                </span>
-                <span className="text-2xl font-bold text-gray-400">×</span>
-                <span className="text-3xl font-bold text-green-600">
-                  {match.awayGoalCount != null ? match.awayGoalCount : 0}
-                </span>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-medium text-gray-900 truncate">
+                {homeTeam.name}
               </div>
-            ) : (
-              <div className="flex flex-col items-center">
-                <Clock className="w-6 h-6 text-green-600 mb-1" />
-                <span className="text-lg font-bold text-green-600">{formatTime()}</span>
+            </div>
+          </div>
+          
+          {/* Score */}
+          <div className="px-4 py-2 mx-4 flex-shrink-0">
+            <div className={`text-lg font-bold text-center ${
+              isLive ? 'text-red-600' : 'text-gray-700'
+            }`}>
+              {getScoreDisplay()}
+            </div>
+            {isLive && match.minute && (
+              <div className="text-xs text-red-600 text-center mt-1">
+                {String(match.minute)}&apos;
               </div>
             )}
           </div>
-
+          
           {/* Away Team */}
-          <div className="flex flex-col items-center space-y-2 flex-1">
-            <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-green-200 bg-white">
-              <img
-                src={buildLogoUrl(match.away_image, match.awayID)}
-                alt={match.away_name}
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  const target = e.currentTarget as HTMLImageElement;
-                  // 1st fallback: try CDN generic by ID
-                  target.onerror = () => {
-                    // 2nd fallback: placeholder local
-                    target.src = '/default-team.svg';
-                  };
-                  target.src = `https://cdn.footystats.org/img/team-logo/${match.awayID}.png`;
-                }}
-                loading="lazy"
-              />
+          <div className="flex-1 flex items-center space-x-3 justify-end">
+            <div className="min-w-0 flex-1 text-right">
+              <div className="text-sm font-medium text-gray-900 truncate">
+                {awayTeam.name}
+              </div>
             </div>
-            <h3 className="text-sm font-bold text-center text-gray-900">{match.away_name}</h3>
-            <span className="text-xs font-medium text-blue-600 bg-blue-100 px-2 py-1 rounded-full">FORA</span>
-          </div>
-        </div>
-
-        {/* Stadium */}
-        <div className="flex items-center justify-center mt-4 pt-4 border-t border-green-200">
-          <div className="flex items-center gap-4 text-sm text-gray-600">
-            <div className="flex items-center gap-1">
-              <Calendar className="w-4 h-4" />
-              <span>{formatDate()}</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <MapPin className="w-4 h-4" />
-              <span className="truncate max-w-[150px]" title={match.stadium_name || 'Local não informado'}>
-                {match.stadium_name || 'Local a definir'}
-              </span>
+            <div className="relative w-8 h-8 flex-shrink-0 bg-gray-100 rounded-full flex items-center justify-center">
+              {awayTeam.logo ? (
+                <Image
+                  src={awayTeam.logo}
+                  alt={`${awayTeam.name} logo`}
+                  width={32}
+                  height={32}
+                  className="object-contain rounded-full"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    const parent = target.parentElement;
+                    if (parent) {
+                      parent.innerHTML = `<span class="text-xs font-bold text-gray-500">${awayTeam.name.charAt(0).toUpperCase()}</span>`;
+                    }
+                  }}
+                  unoptimized={true}
+                />
+              ) : (
+                <span className="text-xs font-bold text-gray-500">
+                  {awayTeam.name.charAt(0).toUpperCase()}
+                </span>
+              )}
             </div>
           </div>
         </div>
+        
+        {/* Additional Info for Upcoming Matches */}
+        {isUpcoming && (
+          <div className="mt-3 text-center">
+            <div className="text-xs text-gray-500">
+              {formatMatchTime(match)}
+            </div>
+          </div>
+        )}
+        
+        {/* Analysis Button */}
+        {showAnalysisButton && (
+          <div className="mt-4 pt-3 border-t border-gray-100">
+            <button
+              onClick={handleAnalyzeClick}
+              className="w-full px-3 py-2 text-sm font-medium text-green-700 bg-green-50 border border-green-200 rounded-md hover:bg-green-100 hover:border-green-300 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+            >
+              📊 Análise da Partida
+            </button>
+          </div>
+        )}
       </div>
-
-      {/* Analyze Button */}
-      {onAnalisarPartida && (
-        <div className="relative p-4 border-t border-green-200">
-          <button
-            onClick={() => {
-              console.log(`🎯 Clicando em Analisar Partida - Match ID: ${match.id}`);
-              onAnalisarPartida(match.id);
-            }}
-            className="w-full px-6 py-3 text-base font-semibold rounded-lg text-white bg-green-600 hover:bg-green-700 transition-all duration-200 hover:shadow-lg transform hover:scale-[1.02]"
-          >
-            Analisar Partida
-          </button>
-        </div>
-      )}
-    </CardComponent>
+    </div>
   );
-};
-
-export default MatchCard;
-export type { MatchCardProps, MatchData };
-
+}

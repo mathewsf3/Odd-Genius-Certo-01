@@ -201,9 +201,11 @@ describe('Models Integration with Existing Services', () => {
     it('should not break existing MatchAnalysisService functionality', () => {
       // Test that importing our models doesn't break existing service
       expect(matchAnalysisService).toBeDefined();
-      expect(typeof matchAnalysisService.getBasicMatchInfo).toBe('function');
       expect(typeof matchAnalysisService.getDetailedMatchInfo).toBe('function');
-      expect(typeof matchAnalysisService.getMatchAnalysis).toBe('function');
+      expect(typeof matchAnalysisService.getMatchOverviewData).toBe('function');
+      expect(typeof matchAnalysisService.getH2HAnalysis).toBe('function');
+      expect(typeof matchAnalysisService.getCornerAnalysis).toBe('function');
+      expect(typeof matchAnalysisService.getGoalAnalysis).toBe('function');
     });
 
     it('should allow gradual migration from any types to DTOs', () => {

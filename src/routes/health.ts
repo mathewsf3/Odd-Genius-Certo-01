@@ -64,7 +64,7 @@ router.get('/detailed', asyncHandler(async (req: Request, res: Response) => {
         // FootyStats API health check
         try {
             const testStartTime = Date.now();
-            const leagues = await DefaultService.getLeagues(config.footyStats.apiKey);
+            const leagues = await DefaultService.getLeagues({ key: config.footyStats.apiKey });
             const testDuration = Date.now() - testStartTime;
             
             healthData.dependencies.footyStatsApi = {
@@ -182,20 +182,20 @@ router.get('/footystats', asyncHandler(async (req: Request, res: Response) => {
         const tests = [
             {
                 name: 'Get Leagues',
-                test: () => DefaultService.getLeagues(config.footyStats.apiKey),
+                test: () => DefaultService.getLeagues({ key: config.footyStats.apiKey }),
             },
             {
                 name: 'Get Countries',
-                test: () => DefaultService.getCountries(config.footyStats.apiKey),
+                test: () => DefaultService.getCountries({ key: config.footyStats.apiKey }),
             },
             {
                 name: 'Get Today\'s Matches',
-                test: () => DefaultService.getTodaysMatches(
-                    config.footyStats.apiKey,
-                    undefined,
-                    new Date().toISOString().split('T')[0],
-                    1
-                ),
+                test: () => DefaultService.getTodaysMatches({
+                    key: config.footyStats.apiKey,
+                    timezone: 'Etc/UTC',
+                    date: new Date().toISOString().split('T')[0],
+                    page: 1
+                }),
             },
         ];
 
