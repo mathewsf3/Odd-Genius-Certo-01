@@ -16,7 +16,7 @@ import LiveCenter from './components/LiveCenter';
 import MagicUITestPage from './pages/MagicUITestPage';
 import MatchDetailsPage from './pages/MatchDetails';
 
-type PageType = 'dashboard' | 'live' | 'magicui-test' | 'match-details';
+type PageType = 'dashboard' | 'live' | 'upcoming' | 'magicui-test' | 'match-details';
 
 function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);

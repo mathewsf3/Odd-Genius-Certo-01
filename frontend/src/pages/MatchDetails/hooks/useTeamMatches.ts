@@ -196,14 +196,18 @@ export const useH2HMatches = (homeId: number, awayId: number, limit: number = 10
         throw new Error(result?.message || 'Failed to fetch H2H matches');
       }
 
-      const matches = result.data || [];
+      // ✅ DEFENSIVE: Ensure data is always an array
+      const matches = Array.isArray(result.data) ? result.data : [];
       console.log(`✅ H2H matches loaded: ${matches.length} matches`);
-      
+
       setData(matches);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido';
       setError(errorMessage);
       console.error('❌ Error fetching H2H matches:', err);
+
+      // ✅ DEFENSIVE: Set empty array on error to prevent frontend crashes
+      setData([]);
     } finally {
       setLoading(false);
     }

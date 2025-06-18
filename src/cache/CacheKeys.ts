@@ -3,7 +3,6 @@
  * Based on FootyStats API endpoints and football constants
  */
 
-import { FOOTY_ENDPOINTS } from '../utils/constants/footballConstants';
 
 export class CacheKeys {
   // Base prefixes
@@ -230,4 +229,33 @@ export class CacheKeys {
 }
 
 // Export commonly used cache key generators
-export const cacheKeys = CacheKeys;
+export const cacheKeys = {
+  // Match-related keys
+  matches: {
+    live: (limit?: number) => `footy:matches:live${limit ? `:limit:${limit}` : ''}`,
+    today: (date?: string) => `footy:matches:today:${date || 'current'}`,
+    upcoming: (limit?: number, hours?: number) => `footy:matches:upcoming${limit ? `:limit:${limit}` : ''}:${hours || 48}h`,
+    totalCount: (date?: string) => `footy:matches:total-count:${date || 'current'}`
+  },
+
+  // Individual match keys
+  match: {
+    details: (matchId: number) => `footy:match:${matchId}:details`,
+    analysis: (matchId: number) => `footy:match:${matchId}:analysis`,
+    h2h: (matchId: number) => `footy:match:${matchId}:h2h`
+  },
+
+  // Team-related keys
+  team: {
+    data: (teamId: number) => `footy:team:${teamId}:data`,
+    stats: (teamId: number, lastX?: number) => `footy:team:${teamId}:stats${lastX ? `:last${lastX}` : ''}`,
+    matches: (teamId: number, limit?: number) => `footy:team:${teamId}:matches${limit ? `:limit:${limit}` : ''}`
+  },
+
+  // League-related keys
+  league: {
+    matches: (leagueId: number, seasonId?: number) => `footy:league:${leagueId}:matches${seasonId ? `:season:${seasonId}` : ''}`,
+    teams: (leagueId: number) => `footy:league:${leagueId}:teams`,
+    tables: (leagueId: number) => `footy:league:${leagueId}:tables`
+  }
+};

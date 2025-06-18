@@ -1,13 +1,14 @@
 /**
  * 🎯 SIMPLE MATCH ANALYSIS SERVICE - STRESS TEST VERSION
- * 
+ *
  * This service tests our foundation by:
  * 1. Getting today's matches
- * 2. Selecting a match for detailed analysis  
+ * 2. Selecting a match for detailed analysis
  * 3. Getting comprehensive match data
  */
 
 import { DefaultService } from '../apis/footy';
+import { requestDeduplication } from './RequestDeduplicationService';
 
 const API_KEY = '4fd202fbc338fbd450e91761c7b83641606b2a4da37dd1a7d29b4cd1d4de9756';
 
@@ -636,25 +637,15 @@ export class MatchAnalysisService {
             };
         }
     }
-    
+
     /**
      * Step 2: Get detailed match analysis
      */
     async getDetailedMatchInfo(matchId: number): Promise<DetailedMatchInfo> {
-        console.log(`🚀 ENTERING getDetailedMatchInfo with matchId: ${matchId}, type: ${typeof matchId}`);
-        console.log(`🔍 About to enter try block...`);
+        console.log(`🔍 Getting PRE-MATCH ANALYSIS for match ID: ${matchId}`);
         try {
-            console.log(`🔍 INSIDE try block - first line!`);
-            console.log(`🔍 Getting detailed info for match ID: ${matchId}`);
-            console.log(`🔍 Match ID type: ${typeof matchId}, value: ${matchId}`);
-            console.log(`🔍 About to validate matchId...`);
-
-            // Validate matchId - SIMPLIFIED
-            console.log(`🔍 Validating matchId: ${matchId}, type: ${typeof matchId}`);
-            console.log(`🔍 !matchId: ${!matchId}`);
-            console.log(`🔍 isNaN(matchId): ${isNaN(matchId)}`);
-
-            if (!matchId || isNaN(matchId)) {
+            // Validate matchId
+            if (!matchId || isNaN(matchId) || matchId <= 0) {
                 console.error(`❌ Invalid matchId: ${matchId}`);
                 return {
                     success: false,
@@ -662,50 +653,86 @@ export class MatchAnalysisService {
                 };
             }
 
-            console.log(`🔍 matchId validation passed! Proceeding...`);
+            console.log(`🔍 Calling FootyStats API for PRE-MATCH data ${matchId}...`);
 
-            console.log(`🔍 matchId validation passed!`);
+            // ✅ STEP 1: Get pre-match details with predictions and H2H using request deduplication
+            const requestKey = `match-details-${matchId}`;
+            const matchDetails = await requestDeduplication.executeRequest(
+                requestKey,
+                () => DefaultService.getMatch({
+                    matchId: matchId,
+                    key: API_KEY
+                }),
+                { timeout: 15000, logDuplicates: true }
+            );
 
-            // Get match details
-            console.log(`🔍 Calling DefaultService.getMatch with matchId: ${matchId}, key: ${API_KEY ? 'present' : 'missing'}`);
-            console.log(`🔍 Parameters being passed: { matchId: ${Number(matchId)}, key: ${API_KEY} }`);
-            console.log(`🔍 Number(matchId) result: ${Number(matchId)}, type: ${typeof Number(matchId)}`);
+            console.log('✅ Got PRE-MATCH details from FootyStats API');
 
-            const params = { matchId: Number(matchId), key: API_KEY };
-            console.log(`🔍 Final params object:`, params);
-            console.log(`🔍 params.matchId:`, params.matchId);
-            console.log(`🔍 params.key:`, params.key);
+            if (!matchDetails?.data) {
+                return {
+                    success: false,
+                    error: 'No match data returned from API'
+                };
+            }
 
-            // Try direct call without destructuring
-            console.log(`🔍 About to call DefaultService.getMatch with:`);
-            console.log(`🔍   - matchId: ${matchId} (type: ${typeof matchId})`);
-            console.log(`🔍   - Number(matchId): ${Number(matchId)} (type: ${typeof Number(matchId)})`);
-            console.log(`🔍   - API_KEY: ${API_KEY ? 'present' : 'missing'}`);
+            const match = matchDetails.data as any;
+            console.log(`📊 PRE-MATCH Analysis: ${match.home_name} vs ${match.away_name}`);
+            console.log(`🎯 Corners Potential: ${match.corners_potential}`);
+            console.log(`🎯 Over 2.5 Potential: ${match.o25_potential}%`);
+            console.log(`🎯 Over 1.5 Potential: ${match.o15_potential}%`);
 
-            const callParams = {
-                matchId: Number(matchId),
-                key: API_KEY
-            };
-            console.log(`🔍 Final call parameters:`, JSON.stringify(callParams, null, 2));
+            // ✅ STEP 2: Get team recent form for enhanced predictions
+            let homeTeamStats = null;
+            let awayTeamStats = null;
 
-            // FIXED: Pass parameters with destructuring, not as object
-            const matchDetails = await DefaultService.getMatch({
-                matchId: Number(matchId),
-                key: API_KEY
-            });
-            console.log('✅ Got match details');
-            
-            // For now, return basic structure - we can expand this later
+            try {
+                console.log('📈 Fetching team recent form for enhanced predictions...');
+                const [homeStats, awayStats] = await Promise.all([
+                    DefaultService.getTeamLastXStats(match.homeID, API_KEY).catch(e => {
+                        console.warn(`⚠️ Could not get home team stats for ${match.homeID}:`, e.message);
+                        return null;
+                    }),
+                    DefaultService.getTeamLastXStats(match.awayID, API_KEY).catch(e => {
+                        console.warn(`⚠️ Could not get away team stats for ${match.awayID}:`, e.message);
+                        return null;
+                    })
+                ]);
+
+                homeTeamStats = homeStats?.data || null;
+                awayTeamStats = awayStats?.data || null;
+                console.log('✅ Team recent form retrieved for enhanced predictions');
+            } catch (error) {
+                console.warn('⚠️ Team stats could not be retrieved:', error);
+            }
+
+            // ✅ STEP 3: Extract H2H data (embedded in match response)
+            const h2hMatches = match.h2h || [];
+            console.log(`📊 H2H Matches found: ${Array.isArray(h2hMatches) ? h2hMatches.length : 0}`);
+
             return {
                 success: true,
                 data: {
-                    matchDetails,
-                    homeTeam: null, // We'll add this later
-                    awayTeam: null, // We'll add this later
-                    analysisTimestamp: new Date().toISOString()
+                    matchDetails: match,
+                    homeTeam: homeTeamStats,
+                    awayTeam: awayTeamStats,
+                    h2hMatches: Array.isArray(h2hMatches) ? h2hMatches : [],
+                    analysisTimestamp: new Date().toISOString(),
+                    // ✅ PRE-MATCH PREDICTIONS (from FootyStats)
+                    predictions: {
+                        corners_potential: match.corners_potential || 0,
+                        over15_potential: match.o15_potential || 0,
+                        over25_potential: match.o25_potential || 0,
+                        over35_potential: match.o35_potential || 0,
+                        over45_potential: match.o45_potential || 0,
+                        under15_potential: match.u15_potential || 0,
+                        under25_potential: match.u25_potential || 0,
+                        under35_potential: match.u35_potential || 0,
+                        btts_potential: match.btts_potential || 0,
+                        trends: match.trends || null
+                    }
                 }
             };
-            
+
         } catch (error) {
             console.error('❌ Error in getDetailedMatchInfo:', error);
             return {
@@ -722,11 +749,11 @@ export class MatchAnalysisService {
     async getMatchAnalysis(options: MatchAnalysisOptions): Promise<MatchAnalysisResult> {
         try {
             console.log(`🎯 Starting comprehensive analysis for match ID: ${options.matchId}`);
-            
+
             // Step 1: Get basic match details
             const matchDetails = await DefaultService.getMatch({ matchId: options.matchId, key: API_KEY });
             console.log('✅ Retrieved match details');
-            
+
             if (!matchDetails?.data) {
                 return {
                     success: false,
@@ -749,7 +776,7 @@ export class MatchAnalysisService {
             if (options.includeTeamStats) {
                 try {
                     console.log('📈 Fetching team statistics...');
-                    
+
                     // Get team info and recent form
                     const [homeTeamInfo, awayTeamInfo] = await Promise.all([
                         DefaultService.getTeam(match.homeID, API_KEY).catch(e => {
@@ -864,17 +891,17 @@ export class MatchAnalysisService {
         // Enhanced analytics if team data is available
         if (homeTeam.lastXMatches && awayTeam.lastXMatches) {
             console.log('📊 Enhancing analytics with team statistics...');
-            
+
             // Calculate more accurate predictions based on recent form
             // This is a simplified calculation - in production, you'd use more sophisticated models
             try {
                 const homeAvgGoals = this.calculateAverageGoals(homeTeam.lastXMatches, 'home');
                 const awayAvgGoals = this.calculateAverageGoals(awayTeam.lastXMatches, 'away');
-                
+
                 analytics.goals.expectedGoals = homeAvgGoals + awayAvgGoals;
                 analytics.goals.over25Probability = analytics.goals.expectedGoals > 2.5 ? 0.65 : 0.35;
                 analytics.goals.bttsLikelihood = (homeAvgGoals > 0.8 && awayAvgGoals > 0.8) ? 0.60 : 0.40;
-                
+
                 console.log(`📈 Enhanced predictions: Expected goals: ${analytics.goals.expectedGoals.toFixed(2)}`);
             } catch (error) {
                 console.warn('⚠️ Could not enhance analytics with team data:', error);
@@ -1099,7 +1126,7 @@ export class MatchAnalysisService {
 
         // 1. BASIC ENDPOINTS
         console.log('\n📋 TESTING BASIC ENDPOINTS...');
-        
+
         // Get Leagues
         try {
             console.log('🔍 Testing getLeagues...');
@@ -1203,13 +1230,13 @@ export class MatchAnalysisService {
                 const leagues = await DefaultService.getLeagues(API_KEY);
                 if (leagues.data && Array.isArray(leagues.data) && leagues.data.length > 0) {
                     // Try to find a league with recent data (Premier League, La Liga, etc.)
-                    const majorLeague = leagues.data.find((league: any) => 
+                    const majorLeague = leagues.data.find((league: any) =>
                         league.name?.toLowerCase().includes('premier') ||
                         league.name?.toLowerCase().includes('la liga') ||
                         league.name?.toLowerCase().includes('bundesliga') ||
                         league.id < 100 // Often major leagues have lower IDs
                     ) || leagues.data[0];
-                    
+
                     if (majorLeague?.id) {
                         testSeasonId = majorLeague.id;
                         console.log(`🎯 Selected test league: ${majorLeague.name || 'Unknown'} (ID: ${testSeasonId})`);

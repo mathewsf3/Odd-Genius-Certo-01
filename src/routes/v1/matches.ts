@@ -16,6 +16,7 @@ import { Router } from 'express';
 import { DefaultService } from '../../apis/footy';
 import { MatchController } from '../../controllers/MatchController';
 import { cacheMiddleware } from '../../middleware/cache';
+import { developmentRateLimit } from '../../middleware/developmentRateLimit';
 import { rateLimiter } from '../../middleware/rateLimiter';
 import { logger } from '../../utils/logger';
 
@@ -76,9 +77,10 @@ router.get('/debug-today', (req, res, next) => {
  * GET /api/v1/matches/live
  * Get currently live matches
  * Supports ?limit=6 for dashboard or no limit for live page
- * Cache: 60 seconds (INCREASED to reduce API calls due to rate limiting)
+ * 🚀 DEVELOPMENT RATE LIMITING: Aggressive caching in development
+ * Cache: 60 seconds (10 minutes in development)
  */
-router.get('/live', cacheMiddleware(60), (req, res, next) => {
+router.get('/live', developmentRateLimit(60), (req, res, next) => {
   matchController.getLiveMatches(req, res, next);
 });
 
@@ -135,9 +137,10 @@ router.get('/upcoming/all', cacheMiddleware(300), (req, res, next) => {
  * GET /api/v1/matches/dashboard
  * ✅ OPTIMIZED: Single API call for all dashboard data
  * Get dashboard data with minimal API calls to avoid rate limiting
- * Cache: 5 minutes
+ * 🚀 DEVELOPMENT RATE LIMITING: Aggressive caching in development
+ * Cache: 5 minutes (50 minutes in development)
  */
-router.get('/dashboard', cacheMiddleware(300), async (req, res) => {
+router.get('/dashboard', developmentRateLimit(300), async (req, res) => {
   try {
     logger.info('📊 Getting optimized dashboard data - MULTI-DAY FETCH for upcoming matches');
 
@@ -774,5 +777,118 @@ router.get('/:id', cacheMiddleware(600), (req, res, next) => {
 router.get('/:id/analysis', cacheMiddleware(900), (req, res, next) => {
   matchController.getMatchAnalysis(req, res, next);
 });
+
+/**
+ * GET /api/v1/matches/:id/pre-match
+ * 🎯 PRE-MATCH ANALYSIS - Following FootyStats workflow
+ *
+ * Returns pre-match prediction data including:
+ * - corners_potential, o15_potential, o25_potential, etc.
+ * - Embedded H2H data from match response
+ * - Team recent form (/lastx endpoint)
+ * - Trends and predictions
+ *
+ * 🚀 DEVELOPMENT RATE LIMITING: Aggressive caching in development
+ * Cache: 30 minutes (2 hours in development)
+ */
+router.get('/:id/pre-match', developmentRateLimit(1800), async (req, res) => {
+  try {
+    const matchId = parseInt(req.params.id);
+
+    if (isNaN(matchId) || matchId <= 0) {
+      res.status(400).json({
+        success: false,
+        error: 'Invalid match ID'
+      });
+      return;
+    }
+
+    logger.info(`🎯 Getting PRE-MATCH analysis for match ${matchId}`);
+
+    const { matchAnalysisService } = await import('../../services/MatchAnalysisService');
+    const result = await matchAnalysisService.getDetailedMatchInfo(matchId);
+
+    if (!result.success) {
+      res.status(502).json({
+        success: false,
+        error: result.error || 'Failed to get pre-match analysis',
+        message: `Pre-match analysis for ${matchId} not available`
+      });
+      return;
+    }
+
+    res.json({
+      success: true,
+      data: result.data,
+      message: `Pre-match analysis for ${matchId} retrieved successfully`,
+      metadata: {
+        analysisType: 'pre-match',
+        timestamp: new Date().toISOString(),
+        source: 'footystats-api'
+      }
+    });
+
+  } catch (error) {
+    logger.error(`❌ Error getting pre-match analysis:`, error);
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
+ * 🛠️ DEVELOPMENT ONLY: Clear development cache
+ * POST /api/v1/matches/dev/clear-cache
+ * Clears all development cache to reset rate limiting
+ */
+if (process.env.NODE_ENV === 'development') {
+  router.post('/dev/clear-cache', async (req, res) => {
+    try {
+      const { clearDevelopmentCache, getDevelopmentCacheStats } = await import('../../middleware/developmentRateLimit');
+
+      const statsBefore = getDevelopmentCacheStats();
+      await clearDevelopmentCache();
+      const statsAfter = getDevelopmentCacheStats();
+
+      logger.info('🧹 Development cache cleared by user request');
+
+      res.json({
+        success: true,
+        message: 'Development cache cleared successfully',
+        stats: {
+          before: statsBefore,
+          after: statsAfter
+        }
+      });
+    } catch (error) {
+      logger.error('❌ Error clearing development cache:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to clear development cache',
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  router.get('/dev/cache-stats', async (req, res) => {
+    try {
+      const { getDevelopmentCacheStats } = await import('../../middleware/developmentRateLimit');
+      const stats = getDevelopmentCacheStats();
+
+      res.json({
+        success: true,
+        data: stats,
+        message: 'Development cache statistics'
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Failed to get cache stats'
+      });
+    }
+  });
+}
 
 export default router;

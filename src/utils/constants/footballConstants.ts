@@ -91,32 +91,36 @@ export const DEFAULT_VALUES = {
   DRAW_RESULT: -1
 } as const;
 
-// Cache TTL strategies for different endpoint types
+// 🚀 DEVELOPMENT-FRIENDLY CACHE TTL STRATEGIES
+// Aggressive caching during development to prevent rate limiting
+const isDevelopment = process.env.NODE_ENV === 'development';
+const DEVELOPMENT_MULTIPLIER = isDevelopment ? 10 : 1; // 10x longer cache in dev
+
 export const CACHE_TTL = {
   // Reference data - rarely changes
-  REFERENCE: 3600, // 1 hour
-  COUNTRIES: 86400, // 24 hours
-  LEAGUES: 3600, // 1 hour
-  
-  // Live/frequent data (Rate limit friendly)
-  LIVE_MATCHES: 600, // 10 minutes
-  TODAY_MATCHES: 600, // 10 minutes
-  
-  // Match details
-  MATCH_DETAILS: 600, // 10 minutes
-  MATCH_STATS: 900, // 15 minutes
-  
-  // League data
-  LEAGUE_SEASON: 1800, // 30 minutes
-  LEAGUE_MATCHES: 900, // 15 minutes
-  LEAGUE_TEAMS: 1800, // 30 minutes
-  LEAGUE_PLAYERS: 3600, // 1 hour
-  LEAGUE_REFEREES: 3600, // 1 hour
-  LEAGUE_TABLES: 900, // 15 minutes
+  REFERENCE: 3600 * DEVELOPMENT_MULTIPLIER, // 1 hour (10 hours in dev)
+  COUNTRIES: 86400, // 24 hours (same in dev - rarely changes)
+  LEAGUES: 3600 * DEVELOPMENT_MULTIPLIER, // 1 hour (10 hours in dev)
 
-  // Team data
-  TEAM_DATA: 1800, // 30 minutes
-  TEAM_STATS: 1800, // 30 minutes
+  // 🔥 AGGRESSIVE DEV CACHING - Prevent rate limiting during development
+  LIVE_MATCHES: isDevelopment ? 3600 : 300, // 1 hour in dev, 5 min in prod
+  TODAY_MATCHES: isDevelopment ? 3600 : 300, // 1 hour in dev, 5 min in prod
+
+  // Match details - Cache heavily in development
+  MATCH_DETAILS: isDevelopment ? 7200 : 600, // 2 hours in dev, 10 min in prod
+  MATCH_STATS: isDevelopment ? 7200 : 900, // 2 hours in dev, 15 min in prod
+  
+  // League data - Extended cache in development
+  LEAGUE_SEASON: 1800 * DEVELOPMENT_MULTIPLIER, // 30 min (5 hours in dev)
+  LEAGUE_MATCHES: isDevelopment ? 3600 : 900, // 1 hour in dev, 15 min in prod
+  LEAGUE_TEAMS: 1800 * DEVELOPMENT_MULTIPLIER, // 30 min (5 hours in dev)
+  LEAGUE_PLAYERS: 3600 * DEVELOPMENT_MULTIPLIER, // 1 hour (10 hours in dev)
+  LEAGUE_REFEREES: 3600 * DEVELOPMENT_MULTIPLIER, // 1 hour (10 hours in dev)
+  LEAGUE_TABLES: isDevelopment ? 3600 : 900, // 1 hour in dev, 15 min in prod
+
+  // Team data - Extended cache in development
+  TEAM_DATA: 1800 * DEVELOPMENT_MULTIPLIER, // 30 min (5 hours in dev)
+  TEAM_STATS: 1800 * DEVELOPMENT_MULTIPLIER, // 30 min (5 hours in dev)
 
   // Player/Referee data
   PLAYER_STATS: 3600, // 1 hour

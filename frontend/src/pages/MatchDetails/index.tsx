@@ -10,13 +10,13 @@
 import { motion } from 'framer-motion';
 import { ArrowLeft, Calendar, Clock, MapPin, Trophy, Users } from 'lucide-react';
 import React, { useState } from 'react';
-import { useMatch } from './hooks/useMatch';
-import { useTeamMatches } from './hooks/useTeamMatches';
 import CornersTab from './components/Tabs/CornersTab';
 import H2HTab from './components/Tabs/H2HTab';
 import OverviewTab from './components/Tabs/OverviewTab';
 import RefereeTab from './components/Tabs/RefereeTab';
 import StatsTab from './components/Tabs/StatsTab';
+import { useMatch } from './hooks/useMatch';
+import { useTeamMatches } from './hooks/useTeamMatches';
 
 interface MatchDetailsPageProps {
   matchId: number;
@@ -25,10 +25,20 @@ interface MatchDetailsPageProps {
 
 const MatchDetailsPage: React.FC<MatchDetailsPageProps> = ({ matchId, onBack }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'h2h' | 'stats' | 'corners' | 'referee'>('overview');
-  
+
   const { data: match, loading: matchLoading, error: matchError } = useMatch(matchId);
   const { data: homeMatches } = useTeamMatches(match?.homeID || 0, 10);
   const { data: awayMatches } = useTeamMatches(match?.awayID || 0, 10);
+
+  // 🔍 DEBUG: Log component state
+  console.log('🎯 MatchDetailsPage State:', {
+    matchId,
+    match,
+    matchLoading,
+    matchError,
+    homeMatches,
+    awayMatches
+  });
 
   if (matchLoading) {
     return (
@@ -36,6 +46,9 @@ const MatchDetailsPage: React.FC<MatchDetailsPageProps> = ({ matchId, onBack }) 
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
           <p className="text-gray-600">Carregando detalhes da partida...</p>
+          <p className="text-sm text-gray-500 mt-2">Match ID: {matchId}</p>
+          <p className="text-sm text-gray-500">Loading: {String(matchLoading)}</p>
+          <p className="text-sm text-gray-500">Error: {matchError || 'None'}</p>
         </div>
       </div>
     );
@@ -82,11 +95,14 @@ const MatchDetailsPage: React.FC<MatchDetailsPageProps> = ({ matchId, onBack }) 
   ];
 
   const renderTabContent = () => {
+    // Extract H2H data from match details (embedded in API response)
+    const h2hMatches = (match as any)?.h2hMatches || [];
+
     switch (activeTab) {
       case 'overview':
         return <OverviewTab match={match} />;
       case 'h2h':
-        return <H2HTab homeId={match.homeID} awayId={match.awayID} />;
+        return <H2HTab homeId={match.homeID} awayId={match.awayID} h2hMatches={h2hMatches} />;
       case 'stats':
         return <StatsTab matchId={match.id} homeMatches={homeMatches} awayMatches={awayMatches} />;
       case 'corners':

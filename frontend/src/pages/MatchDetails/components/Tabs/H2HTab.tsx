@@ -8,14 +8,14 @@
  */
 
 import { motion } from 'framer-motion';
-import { TrendingUp, Trophy, Target } from 'lucide-react';
+import { Target, TrendingUp, Trophy } from 'lucide-react';
 import React, { useState } from 'react';
-import { useH2HMatches } from '../../hooks/useTeamMatches';
 import type { TeamMatch } from '../../hooks/useTeamMatches';
 
 interface H2HTabProps {
   homeId: number;
   awayId: number;
+  h2hMatches?: any[]; // H2H data from match details
 }
 
 interface TeamStats {
@@ -29,9 +29,21 @@ interface TeamStats {
   avgGoalsAgainst: number;
 }
 
-const H2HTab: React.FC<H2HTabProps> = ({ homeId, awayId }) => {
+const H2HTab: React.FC<H2HTabProps> = ({ homeId, awayId, h2hMatches: embeddedH2H = [] }) => {
   const [range, setRange] = useState<5 | 10>(5);
-  const { data: h2hMatches, loading, error } = useH2HMatches(homeId, awayId, range);
+
+  // ✅ Use embedded H2H data from match details (pre-match analysis)
+  const h2hMatches = Array.isArray(embeddedH2H) ? embeddedH2H.slice(0, range) : [];
+  const loading = false; // No loading since data is already embedded
+  const error = null; // No error since data comes from parent
+
+  console.log('🔍 H2H Tab - Using embedded H2H data:', {
+    homeId,
+    awayId,
+    embeddedCount: embeddedH2H.length,
+    displayCount: h2hMatches.length,
+    range
+  });
 
   const calculateTeamStats = (matches: TeamMatch[], teamId: number): TeamStats => {
     const teamMatches = matches.filter(match => 
@@ -234,9 +246,16 @@ const H2HTab: React.FC<H2HTabProps> = ({ homeId, awayId }) => {
           <h3 className="text-lg font-semibold text-gray-900">Histórico de Confrontos</h3>
         </div>
 
-        {h2hMatches.length === 0 ? (
+        {/* ✅ DEFENSIVE RENDERING: Check if h2hMatches is array and handle empty state */}
+        {!Array.isArray(h2hMatches) ? (
+          <div className="text-center py-8">
+            <p className="text-gray-500">Erro ao carregar dados de confronto direto</p>
+            <p className="text-gray-400 text-sm mt-2">Tente recarregar a página</p>
+          </div>
+        ) : h2hMatches.length === 0 ? (
           <div className="text-center py-8">
             <p className="text-gray-500">Nenhum confronto direto encontrado nos últimos {range} jogos</p>
+            <p className="text-gray-400 text-sm mt-2">Os times podem não ter se enfrentado recentemente</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -252,17 +271,22 @@ const H2HTab: React.FC<H2HTabProps> = ({ homeId, awayId }) => {
               </thead>
               <tbody>
                 {h2hMatches.map((match, index) => (
-                  <tr key={match.id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                    <td className="p-3 text-gray-600">{formatDate(match.date_unix)}</td>
-                    <td className="p-3 font-medium">{match.home_name}</td>
+                  <tr
+                    key={`h2h-match-${match.id || index}-${index}`}
+                    className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}
+                  >
+                    <td className="p-3 text-gray-600">
+                      {match.date_unix ? formatDate(match.date_unix) : 'Data não disponível'}
+                    </td>
+                    <td className="p-3 font-medium">{match.home_name || 'Time não informado'}</td>
                     <td className="p-3 text-center">
                       <span className="font-bold text-green-600">
-                        {match.home_score} - {match.away_score}
+                        {match.home_score ?? 0} - {match.away_score ?? 0}
                       </span>
                     </td>
-                    <td className="p-3 font-medium text-right">{match.away_name}</td>
+                    <td className="p-3 font-medium text-right">{match.away_name || 'Time não informado'}</td>
                     <td className="p-3 text-center text-gray-600">
-                      {match.competition_name || `Liga ${match.competition_id}`}
+                      {match.competition_name || `Liga ${match.competition_id || 'N/A'}`}
                     </td>
                   </tr>
                 ))}

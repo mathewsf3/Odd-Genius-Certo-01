@@ -11,15 +11,17 @@
  */
 
 import { NextFunction, Request, Response } from 'express';
-import { BasicMatchInfo, DetailedMatchInfo, MatchAnalysisResult, MatchAnalysisService } from '../services/MatchAnalysisService';
+import { CachedMatchService } from '../services/CachedMatchService';
 import { liveMatchService } from '../services/liveMatchService';
+import { BasicMatchInfo, DetailedMatchInfo, MatchAnalysisResult } from '../services/MatchAnalysisService';
 import { logger } from '../utils/logger';
 
 export class MatchController {
-  private matchAnalysisService: MatchAnalysisService;
+  private cachedMatchService: CachedMatchService;
 
   constructor() {
-    this.matchAnalysisService = new MatchAnalysisService();
+    this.cachedMatchService = new CachedMatchService();
+    logger.info('✅ MatchController initialized with caching layer');
   }
 
   /**
@@ -32,7 +34,7 @@ export class MatchController {
       logger.info('📊 Getting total match count for dashboard');
 
       const date = req.query.date as string;
-      const result = await this.matchAnalysisService.getTotalMatchCount(date);
+      const result = await this.cachedMatchService.getTotalMatchCount(date);
 
       if (result.success) {
         res.json({
@@ -64,7 +66,7 @@ export class MatchController {
       logger.info('📅 Getting today\'s matches');
       
       const date = req.query.date as string || undefined;
-      const result: BasicMatchInfo = await this.matchAnalysisService.getBasicMatchInfo(date);
+      const result: BasicMatchInfo = await this.cachedMatchService.getTodaysMatches(date);
 
       if (!result.success) {
         res.status(404).json({
@@ -97,16 +99,9 @@ export class MatchController {
    */
   async getMatchById(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      console.log(`🔍 MatchController.getMatchById - req.params:`, req.params);
-      console.log(`🔍 MatchController.getMatchById - req.params.id:`, req.params.id);
-      console.log(`🔍 MatchController.getMatchById - typeof req.params.id:`, typeof req.params.id);
-
       const matchId = parseInt(req.params.id);
-      console.log(`🔍 MatchController.getMatchById - parsed matchId:`, matchId);
-      console.log(`🔍 MatchController.getMatchById - typeof matchId:`, typeof matchId);
 
-      if (isNaN(matchId)) {
-        console.log(`❌ MatchController.getMatchById - matchId is NaN`);
+      if (isNaN(matchId) || matchId <= 0) {
         res.status(400).json({
           success: false,
           message: 'Invalid match ID format'
@@ -115,19 +110,14 @@ export class MatchController {
       }
 
       logger.info(`🔍 Getting detailed info for match ${matchId}`);
-      console.log(`🔍 MatchController.getMatchById - Calling getDetailedMatchInfo with matchId:`, matchId);
-      console.log(`🔍 MatchController.getMatchById - this.matchAnalysisService:`, this.matchAnalysisService);
-      console.log(`🔍 MatchController.getMatchById - typeof this.matchAnalysisService.getDetailedMatchInfo:`, typeof this.matchAnalysisService.getDetailedMatchInfo);
-      console.log(`🔍 MatchController.getMatchById - About to call getDetailedMatchInfo...`);
 
-      const result: DetailedMatchInfo = await this.matchAnalysisService.getDetailedMatchInfo(matchId);
-
-      console.log(`🔍 MatchController.getMatchById - getDetailedMatchInfo returned:`, result);
+      const result: DetailedMatchInfo = await this.cachedMatchService.getMatchById(matchId);
 
       if (!result.success) {
-        res.status(404).json({
+        // Return 502 Bad Gateway for API errors, not 404
+        res.status(502).json({
           success: false,
-          message: `Match ${matchId} not found`,
+          message: `Unable to retrieve match ${matchId} data`,
           error: result.error
         });
         return;
@@ -172,7 +162,7 @@ export class MatchController {
 
       logger.info(`📊 Getting comprehensive analysis for match ${matchId}`, options);
       
-      const result: MatchAnalysisResult = await this.matchAnalysisService.getMatchAnalysis(options);
+      const result: MatchAnalysisResult = await this.cachedMatchService.getMatchAnalysis(options);
 
       if (!result.success) {
         res.status(404).json({
@@ -217,7 +207,7 @@ export class MatchController {
 
         logger.info(`Upcoming matches request: ${upcomingLimit ? `limited to ${upcomingLimit}` : 'unlimited'}, next ${hours} hours`);
 
-        const upcomingMatches = await this.matchAnalysisService.getUpcomingMatches(upcomingLimit, hours);
+        const upcomingMatches = await this.cachedMatchService.getUpcomingMatches(upcomingLimit, hours);
 
         res.json({
           success: true,
@@ -234,7 +224,7 @@ export class MatchController {
       if (status === 'live') {
         logger.info('⚡ Getting live matches via search');
         const liveLimit = limit ? limitNum : undefined;
-        const liveMatches = await this.matchAnalysisService.getLiveMatches(liveLimit);
+        const liveMatches = await this.cachedMatchService.getLiveMatches(liveLimit);
 
         res.json({
           success: true,
@@ -247,7 +237,7 @@ export class MatchController {
       }
 
       // Default: return today's matches
-      const result: BasicMatchInfo = await this.matchAnalysisService.getBasicMatchInfo(date as string);
+      const result: BasicMatchInfo = await this.cachedMatchService.getTodaysMatches(date as string);
 
       res.json({
         success: true,
@@ -268,7 +258,7 @@ export class MatchController {
     try {
       logger.info('🚨 DEBUG: Testing today\'s matches directly');
 
-      const result = await this.matchAnalysisService.debugTodaysMatches();
+      const result = await this.cachedMatchService.debugTodaysMatches();
 
       res.json({
         success: true,
@@ -346,7 +336,7 @@ export class MatchController {
       logger.info('📊 Getting total upcoming matches count');
 
       // Get all upcoming matches to count them (use high limit to get all matches)
-      const allUpcomingMatches = await this.matchAnalysisService.getUpcomingMatches(1000);
+      const allUpcomingMatches = await this.cachedMatchService.getUpcomingMatches(1000);
 
       // Filter for next 24 hours
       const now = Math.floor(Date.now() / 1000);

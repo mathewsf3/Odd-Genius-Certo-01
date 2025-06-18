@@ -8,7 +8,7 @@
  */
 
 import { motion } from 'framer-motion';
-import { Calendar, Clock, MapPin, Thermometer, Trophy, Users } from 'lucide-react';
+import { Calendar, Clock, MapPin, Trophy, Users } from 'lucide-react';
 import React from 'react';
 import type { MatchData } from '../../../../components/MatchCard';
 
@@ -228,34 +228,112 @@ const OverviewTab: React.FC<OverviewTabProps> = ({ match }) => {
         </div>
       </motion.div>
 
-      {/* Quick Stats */}
+      {/* Pre-Match Predictions */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3 }}
         className="bg-white rounded-xl border border-gray-200 p-6"
       >
-        <h3 className="text-lg font-semibold text-gray-900 mb-6">Estatísticas Rápidas</h3>
-        
+        <h3 className="text-lg font-semibold text-gray-900 mb-6">📊 Análise Pré-Jogo</h3>
+
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="text-center p-4 bg-gray-50 rounded-lg">
-            <p className="text-2xl font-bold text-green-600">N/A</p>
-            <p className="text-sm text-gray-600">Posse de Bola</p>
+          <div className="text-center p-4 bg-green-50 rounded-lg border border-green-200">
+            <p className="text-2xl font-bold text-green-600">
+              {(match as any)?.corners_potential || 'N/A'}
+            </p>
+            <p className="text-sm text-gray-600">Escanteios Esperados</p>
           </div>
-          
-          <div className="text-center p-4 bg-gray-50 rounded-lg">
-            <p className="text-2xl font-bold text-green-600">N/A</p>
-            <p className="text-sm text-gray-600">Chutes</p>
+
+          <div className="text-center p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <p className="text-2xl font-bold text-blue-600">
+              {(match as any)?.over25_potential ? `${(match as any).over25_potential}%` : 'N/A'}
+            </p>
+            <p className="text-sm text-gray-600">Over 2.5 Gols</p>
           </div>
-          
-          <div className="text-center p-4 bg-gray-50 rounded-lg">
-            <p className="text-2xl font-bold text-green-600">N/A</p>
-            <p className="text-sm text-gray-600">Escanteios</p>
+
+          <div className="text-center p-4 bg-purple-50 rounded-lg border border-purple-200">
+            <p className="text-2xl font-bold text-purple-600">
+              {(match as any)?.over15_potential ? `${(match as any).over15_potential}%` : 'N/A'}
+            </p>
+            <p className="text-sm text-gray-600">Over 1.5 Gols</p>
           </div>
-          
-          <div className="text-center p-4 bg-gray-50 rounded-lg">
-            <p className="text-2xl font-bold text-green-600">N/A</p>
-            <p className="text-sm text-gray-600">Cartões</p>
+
+          <div className="text-center p-4 bg-orange-50 rounded-lg border border-orange-200">
+            <p className="text-2xl font-bold text-orange-600">
+              {(match as any)?.btts_potential ? `${(match as any).btts_potential}%` : 'N/A'}
+            </p>
+            <p className="text-sm text-gray-600">Ambas Marcam</p>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Additional Predictions */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.4 }}
+        className="bg-white rounded-xl border border-gray-200 p-6"
+      >
+        <h3 className="text-lg font-semibold text-gray-900 mb-6">🎯 Previsões Detalhadas</h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <h4 className="font-medium text-gray-900 mb-3">Potencial de Gols</h4>
+            <div className="space-y-2">
+              <div className="flex justify-between">
+                <span className="text-gray-600">Over 3.5:</span>
+                <span className="font-medium">
+                  {(match as any)?.over35_potential ? `${(match as any).over35_potential}%` : 'N/A'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Over 4.5:</span>
+                <span className="font-medium">
+                  {(match as any)?.over45_potential ? `${(match as any).over45_potential}%` : 'N/A'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Under 2.5:</span>
+                <span className="font-medium">
+                  {(match as any)?.predictions?.under25_potential ? `${(match as any).predictions.under25_potential}%` : 'N/A'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <h4 className="font-medium text-gray-900 mb-3">Tendências</h4>
+            <div className="text-sm text-gray-600">
+              {(() => {
+                const trends = (match as any)?.trends;
+                if (!trends) {
+                  return <p className="italic">Tendências não disponíveis para esta partida</p>;
+                }
+
+                // Handle trends object with home/away structure
+                if (typeof trends === 'object' && trends.home && trends.away) {
+                  return (
+                    <div className="space-y-2">
+                      <div>
+                        <span className="font-medium">Casa:</span> {Array.isArray(trends.home) ? trends.home.join(', ') : 'N/A'}
+                      </div>
+                      <div>
+                        <span className="font-medium">Visitante:</span> {Array.isArray(trends.away) ? trends.away.join(', ') : 'N/A'}
+                      </div>
+                    </div>
+                  );
+                }
+
+                // Handle trends as string
+                if (typeof trends === 'string') {
+                  return <p>{trends}</p>;
+                }
+
+                // Fallback for other formats
+                return <p className="italic">Formato de tendências não suportado</p>;
+              })()}
+            </div>
           </div>
         </div>
       </motion.div>
