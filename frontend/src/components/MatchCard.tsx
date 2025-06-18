@@ -28,6 +28,8 @@ interface MatchData {
   stadium_name?: string;
   stadium_location?: string;
   competition_id?: number;
+  competition_name?: string;
+  country_name?: string;
   match_url?: string;
 }
 
@@ -41,26 +43,65 @@ interface MatchCardProps {
 }
 
 const getStatusConfig = (status: string) => {
-  // ✅ NORMALIZED STATUS MAPPING - Following user's checklist
+  // ✅ ENHANCED STATUS MAPPING - Including FootyStats live statuses
+  const normalizedStatus = status.toLowerCase();
   const statusMap: { [key: string]: { label: string; className: string; icon: string } } = {
-    // Live matches
+    // Live matches - All FootyStats live statuses
     'live': { label: 'AO VIVO', className: 'bg-red-500 text-white animate-pulse', icon: '🔴' },
+    'inplay': { label: 'AO VIVO', className: 'bg-red-500 text-white animate-pulse', icon: '🔴' },
+    '1st half': { label: 'AO VIVO', className: 'bg-red-500 text-white animate-pulse', icon: '🔴' },
+    '2nd half': { label: 'AO VIVO', className: 'bg-red-500 text-white animate-pulse', icon: '🔴' },
+    'ht': { label: 'INTERVALO', className: 'bg-orange-500 text-white animate-pulse', icon: '⏸️' },
+    'et': { label: 'PRORROGAÇÃO', className: 'bg-red-600 text-white animate-pulse', icon: '🔴' },
+    'penalties': { label: 'PÊNALTIS', className: 'bg-purple-500 text-white animate-pulse', icon: '⚽' },
     'incomplete': { label: 'AO VIVO', className: 'bg-red-500 text-white animate-pulse', icon: '🔴' },
 
     // Upcoming matches
     'upcoming': { label: 'EM BREVE', className: 'bg-yellow-100 text-yellow-800', icon: '⏰' },
+    'not_started': { label: 'EM BREVE', className: 'bg-yellow-100 text-yellow-800', icon: '⏰' },
+    'ns': { label: 'EM BREVE', className: 'bg-yellow-100 text-yellow-800', icon: '⏰' },
     'scheduled': { label: 'EM BREVE', className: 'bg-yellow-100 text-yellow-800', icon: '⏰' },
+    'kick off': { label: 'EM BREVE', className: 'bg-yellow-100 text-yellow-800', icon: '⏰' },
+    'tbd': { label: 'A DEFINIR', className: 'bg-gray-100 text-gray-800', icon: '❓' },
 
     // Finished matches
     'finished': { label: 'FINALIZADA', className: 'bg-gray-500 text-white', icon: '✅' },
     'complete': { label: 'FINALIZADA', className: 'bg-gray-500 text-white', icon: '✅' },
+    'ft': { label: 'FINALIZADA', className: 'bg-gray-500 text-white', icon: '✅' },
 
     // Special cases
     'postponed': { label: 'ADIADA', className: 'bg-yellow-500 text-black', icon: '⚠️' },
-    'cancelled': { label: 'CANCELADA', className: 'bg-red-100 text-red-800', icon: '❌' }
+    'cancelled': { label: 'CANCELADA', className: 'bg-red-100 text-red-800', icon: '❌' },
+    'suspended': { label: 'SUSPENSA', className: 'bg-red-200 text-red-900', icon: '⛔' }
   };
 
-  return statusMap[status] || { label: 'EM BREVE', className: 'bg-yellow-100 text-yellow-800', icon: '⏰' };
+  return statusMap[normalizedStatus] || { label: 'EM BREVE', className: 'bg-yellow-100 text-yellow-800', icon: '⏰' };
+};
+
+// ✅ UTILITY FUNCTION FOR LOGO URL HANDLING
+const buildLogoUrl = (imagePath: string | null | undefined, teamId: number): string => {
+  // If empty → return placeholder
+  if (!imagePath || imagePath === 'null' || imagePath.trim() === '') {
+    return '/default-team.svg';
+  }
+
+  // If already absolute (http/https) → ensure https
+  if (imagePath.startsWith('http')) {
+    return imagePath.replace('http://', 'https://');
+  }
+
+  // Use new CDN: https://cdn.footystats.org/img/
+  return `https://cdn.footystats.org/img/${imagePath}`;
+};
+
+// ✅ UTILITY FUNCTION TO DETERMINE IF SCORE SHOULD BE SHOWN
+const shouldShowScore = (status: string): boolean => {
+  const normalizedStatus = status.toLowerCase();
+  const scoreStatuses = [
+    'live', 'inplay', '1st half', '2nd half', 'ht', 'et', 'penalties',
+    'incomplete', 'finished', 'complete', 'ft', 'suspended'
+  ];
+  return scoreStatuses.includes(normalizedStatus);
 };
 
 const MatchCard: React.FC<MatchCardProps> = ({
@@ -117,7 +158,7 @@ const MatchCard: React.FC<MatchCardProps> = ({
           <div className="flex items-center gap-2">
             <Trophy className="w-4 h-4 text-green-600" />
             <span className="text-sm font-medium text-green-700 truncate max-w-[200px]">
-              Partida • {formatDate()}
+              {match.competition_name || `Liga ${match.competition_id || 'N/A'}`} • {formatDate()}
             </span>
           </div>
           <div className={cn(
@@ -137,12 +178,17 @@ const MatchCard: React.FC<MatchCardProps> = ({
           <div className="flex flex-col items-center space-y-2 flex-1">
             <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-green-200 bg-white">
               <img
-                src={match.home_image ? `https://footystats.org/img/${match.home_image}` : '/assets/placeholder-team.svg'}
+                src={buildLogoUrl(match.home_image, match.homeID)}
                 alt={match.home_name}
                 className="w-full h-full object-cover"
                 onError={(e) => {
-                  const target = e.target as HTMLImageElement;
-                  target.src = '/assets/placeholder-team.svg';
+                  const target = e.currentTarget as HTMLImageElement;
+                  // 1st fallback: try CDN generic by ID
+                  target.onerror = () => {
+                    // 2nd fallback: placeholder local
+                    target.src = '/default-team.svg';
+                  };
+                  target.src = `https://cdn.footystats.org/img/team-logo/${match.homeID}.png`;
                 }}
                 loading="lazy"
               />
@@ -153,7 +199,7 @@ const MatchCard: React.FC<MatchCardProps> = ({
 
           {/* Score */}
           <div className="flex flex-col items-center space-y-2 px-4">
-            {match.status === 'live' || match.status === 'incomplete' || match.status === 'finished' || match.status === 'complete' ? (
+            {shouldShowScore(match.status) ? (
               <div className="flex items-center space-x-4">
                 <span className="text-3xl font-bold text-green-600">
                   {match.homeGoalCount != null ? match.homeGoalCount : 0}
@@ -175,12 +221,17 @@ const MatchCard: React.FC<MatchCardProps> = ({
           <div className="flex flex-col items-center space-y-2 flex-1">
             <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-green-200 bg-white">
               <img
-                src={match.away_image ? `https://footystats.org/img/${match.away_image}` : '/assets/placeholder-team.svg'}
+                src={buildLogoUrl(match.away_image, match.awayID)}
                 alt={match.away_name}
                 className="w-full h-full object-cover"
                 onError={(e) => {
-                  const target = e.target as HTMLImageElement;
-                  target.src = '/assets/placeholder-team.svg';
+                  const target = e.currentTarget as HTMLImageElement;
+                  // 1st fallback: try CDN generic by ID
+                  target.onerror = () => {
+                    // 2nd fallback: placeholder local
+                    target.src = '/default-team.svg';
+                  };
+                  target.src = `https://cdn.footystats.org/img/team-logo/${match.awayID}.png`;
                 }}
                 loading="lazy"
               />
@@ -211,7 +262,10 @@ const MatchCard: React.FC<MatchCardProps> = ({
       {onAnalisarPartida && (
         <div className="relative p-4 border-t border-green-200">
           <button
-            onClick={() => onAnalisarPartida(match.id)}
+            onClick={() => {
+              console.log(`🎯 Clicando em Analisar Partida - Match ID: ${match.id}`);
+              onAnalisarPartida(match.id);
+            }}
             className="w-full px-6 py-3 text-base font-semibold rounded-lg text-white bg-green-600 hover:bg-green-700 transition-all duration-200 hover:shadow-lg transform hover:scale-[1.02]"
           >
             Analisar Partida

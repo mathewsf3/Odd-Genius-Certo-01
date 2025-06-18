@@ -153,8 +153,14 @@ router.use('/analytics',
 );
 
 // Player routes (moderate caching)
-router.use('/players', 
+router.use('/players',
     cacheMiddleware(1800), // 30 minute cache (player data changes less frequently)
+    playerRoutes
+);
+
+// Referee routes (reuse player controller)
+router.use('/referees',
+    cacheMiddleware(1800), // 30 minute cache
     playerRoutes
 );
 

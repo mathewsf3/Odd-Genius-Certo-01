@@ -219,29 +219,10 @@ router.get('/dashboard', cacheMiddleware(300), async (req, res) => {
     // ✅ ENHANCED STATUS NORMALIZATION - Following user's analysis
     // currentTime already declared above
 
-    // ✅ LIVE MATCH DETECTION - Following FootyStats API documentation
-    const LIVE_KEYWORDS = [
-      '1st half', '2nd half', 'extra time', 'penalty', 'half time', 'ht', 'inplay',
-      'incomplete' // FootyStats uses 'incomplete' for live matches
-    ];
-
-    const allLiveMatches = allMatches.filter(match => {
-      const status = match.status?.toLowerCase() || '';
-      const matchTime = match.date_unix || 0;
-      const timeDiff = currentTime - matchTime;
-
-      // Check if status indicates live match
-      const isLiveStatus = LIVE_KEYWORDS.some(keyword => status.includes(keyword));
-
-      // Match is live if:
-      // 1. Status indicates live (incomplete, 1st half, etc.)
-      // 2. Match time has passed (started)
-      // 3. Not too old (within 4 hours = 14400 seconds)
-      return isLiveStatus &&
-             matchTime <= currentTime &&
-             timeDiff >= 0 &&
-             timeDiff <= 14400; // 4 hours max for live matches
-    });
+    // ✅ USE LIVE MATCH SERVICE - Get real live matches from dedicated service
+    const { liveMatchService } = await import('../../services/liveMatchService');
+    const liveMatchesResult = await liveMatchService.getLiveMatches();
+    const allLiveMatches = liveMatchesResult.success ? liveMatchesResult.data : [];
 
     // ✅ FIXED: Use SAME LOGIC as /upcoming/all endpoint (SIMPLE TIME-BASED FILTER)
     const allUpcomingMatches = allMatches.filter(match => {
@@ -275,6 +256,66 @@ router.get('/dashboard', cacheMiddleware(300), async (req, res) => {
         normalizedStatus = 'upcoming';
       }
 
+      // ✅ LEAGUE NAME MAPPING - Use static mapping for common leagues
+      const getLeagueName = (seasonId: number): string => {
+        const staticLeagueMap: { [key: number]: string } = {
+          // Major European Leagues
+          14124: 'Premier League',
+          14125: 'La Liga',
+          14126: 'Serie A',
+          14127: 'Bundesliga',
+          14128: 'Ligue 1',
+          14131: 'Eredivisie',
+          14132: 'Primeira Liga',
+          14133: 'Scottish Premiership',
+          14134: 'Belgian Pro League',
+          14135: 'Austrian Bundesliga',
+          14136: 'Swiss Super League',
+
+          // International Competitions
+          14100: 'UEFA Champions League',
+          14101: 'UEFA Europa League',
+          14102: 'UEFA Conference League',
+          14103: 'FIFA World Cup',
+          14104: 'UEFA European Championship',
+
+          // American Leagues
+          14123: 'MLS (USA)',
+          14122: 'NWSL (USA)',
+          14130: 'Liga MX',
+          14596: 'Canadian Soccer League',
+
+          // South American Leagues
+          14129: 'Brasileirão Série A',
+          14116: 'Primera División Chile',
+          14157: 'Primera División Argentina',
+          14158: 'Primera División Uruguay',
+          14159: 'Liga Profesional Colombia',
+
+          // Asian Leagues
+          14165: 'J1 League (Japan)',
+          14166: 'K League 1 (South Korea)',
+          14167: 'Chinese Super League',
+          14168: 'A-League (Australia)',
+          14169: 'Thai League 1',
+
+          // African Leagues
+          14180: 'Egyptian Premier League',
+          14181: 'South African Premier Division',
+
+          // Common problematic IDs
+          14085: 'Liga Regional Peru',
+          14305: 'Liga Nacional',
+          14306: 'Copa Regional',
+          14307: 'Torneo Nacional',
+          14308: 'Liga Profissional',
+          14309: 'Campeonato Nacional',
+          14310: 'Copa Nacional'
+        };
+
+        return staticLeagueMap[seasonId] || `Liga ${seasonId}`;
+      };
+
       return {
         ...match,
         // ✅ CORRECT STATUS MAPPING
@@ -282,6 +323,10 @@ router.get('/dashboard', cacheMiddleware(300), async (req, res) => {
         // ✅ REAL SCORES - Use actual goal counts from API
         homeGoalCount: match.homeGoalCount || 0,
         awayGoalCount: match.awayGoalCount || 0,
+        // ✅ COMPETITION INFORMATION - Add league name
+        competition_id: match.competition_id || match.seasonID || 0,
+        competition_name: match.competition_name || getLeagueName(match.competition_id || match.seasonID || 0),
+        country_name: match.country_name || 'País não informado',
         // ✅ PRESERVE ORIGINAL FIELDS
         originalStatus: match.status
       };
@@ -595,6 +640,79 @@ router.get('/leagues/mapping', async (req, res) => {
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error occurred',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+/**
+ * GET /api/v1/matches/h2h
+ * Get head-to-head matches between two teams
+ * Cache: 10 minutes
+ */
+router.get('/h2h', cacheMiddleware(600), async (req, res) => {
+  try {
+    const team1Id = parseInt(req.query.team1_id as string);
+    const team2Id = parseInt(req.query.team2_id as string);
+    const limit = parseInt(req.query.limit as string) || 10;
+
+    if (isNaN(team1Id) || isNaN(team2Id)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid team IDs',
+        message: 'Both team1_id and team2_id must be valid numbers'
+      });
+    }
+
+    logger.info(`⚔️ Fetching H2H matches: ${team1Id} vs ${team2Id} (last ${limit})`);
+
+    // Use FootyStats API to get H2H matches
+    // Get recent stats for both teams (which includes recent matches)
+    const [team1Stats, team2Stats] = await Promise.all([
+      DefaultService.getTeamLastXStats({ teamId: team1Id }),
+      DefaultService.getTeamLastXStats({ teamId: team2Id })
+    ]);
+
+    // Extract matches from stats responses
+    const team1Matches = team1Stats?.data?.matches || team1Stats?.data?.last_matches || [];
+    const team2Matches = team2Stats?.data?.matches || team2Stats?.data?.last_matches || [];
+
+    const allMatches = [
+      ...team1Matches,
+      ...team2Matches
+    ];
+
+    // Filter for matches between these two teams
+    const h2hMatches = allMatches.filter((match: any) =>
+      (match.home_team_id === team1Id && match.away_team_id === team2Id) ||
+      (match.home_team_id === team2Id && match.away_team_id === team1Id)
+    );
+
+    // Remove duplicates and sort by date
+    const uniqueMatches = h2hMatches.filter((match, index, self) =>
+      index === self.findIndex(m => m.id === match.id)
+    ).sort((a, b) => b.date_unix - a.date_unix).slice(0, limit);
+
+    logger.info(`✅ Found ${uniqueMatches.length} H2H matches`);
+
+    res.json({
+      success: true,
+      data: uniqueMatches,
+      meta: {
+        team1Id,
+        team2Id,
+        limit,
+        total: uniqueMatches.length
+      },
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    logger.error(`❌ Error fetching H2H matches:`, error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch H2H matches',
+      message: error instanceof Error ? error.message : 'Unknown error occurred',
       timestamp: new Date().toISOString()
     });
   }

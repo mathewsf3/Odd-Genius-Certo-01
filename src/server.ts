@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+// Force recompilation - debug match analysis v7 - TRY BLOCK DEBUG
 /**
  * 🚀 Football API Server Entry Point
  * 

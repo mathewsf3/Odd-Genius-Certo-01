@@ -641,10 +641,58 @@ export class MatchAnalysisService {
      * Step 2: Get detailed match analysis
      */
     async getDetailedMatchInfo(matchId: number): Promise<DetailedMatchInfo> {
+        console.log(`🚀 ENTERING getDetailedMatchInfo with matchId: ${matchId}, type: ${typeof matchId}`);
+        console.log(`🔍 About to enter try block...`);
         try {
+            console.log(`🔍 INSIDE try block - first line!`);
             console.log(`🔍 Getting detailed info for match ID: ${matchId}`);
-              // Get match details
-            const matchDetails = await DefaultService.getMatch(matchId, API_KEY);
+            console.log(`🔍 Match ID type: ${typeof matchId}, value: ${matchId}`);
+            console.log(`🔍 About to validate matchId...`);
+
+            // Validate matchId - SIMPLIFIED
+            console.log(`🔍 Validating matchId: ${matchId}, type: ${typeof matchId}`);
+            console.log(`🔍 !matchId: ${!matchId}`);
+            console.log(`🔍 isNaN(matchId): ${isNaN(matchId)}`);
+
+            if (!matchId || isNaN(matchId)) {
+                console.error(`❌ Invalid matchId: ${matchId}`);
+                return {
+                    success: false,
+                    error: `Invalid match ID: ${matchId}`
+                };
+            }
+
+            console.log(`🔍 matchId validation passed! Proceeding...`);
+
+            console.log(`🔍 matchId validation passed!`);
+
+            // Get match details
+            console.log(`🔍 Calling DefaultService.getMatch with matchId: ${matchId}, key: ${API_KEY ? 'present' : 'missing'}`);
+            console.log(`🔍 Parameters being passed: { matchId: ${Number(matchId)}, key: ${API_KEY} }`);
+            console.log(`🔍 Number(matchId) result: ${Number(matchId)}, type: ${typeof Number(matchId)}`);
+
+            const params = { matchId: Number(matchId), key: API_KEY };
+            console.log(`🔍 Final params object:`, params);
+            console.log(`🔍 params.matchId:`, params.matchId);
+            console.log(`🔍 params.key:`, params.key);
+
+            // Try direct call without destructuring
+            console.log(`🔍 About to call DefaultService.getMatch with:`);
+            console.log(`🔍   - matchId: ${matchId} (type: ${typeof matchId})`);
+            console.log(`🔍   - Number(matchId): ${Number(matchId)} (type: ${typeof Number(matchId)})`);
+            console.log(`🔍   - API_KEY: ${API_KEY ? 'present' : 'missing'}`);
+
+            const callParams = {
+                matchId: Number(matchId),
+                key: API_KEY
+            };
+            console.log(`🔍 Final call parameters:`, JSON.stringify(callParams, null, 2));
+
+            // FIXED: Pass parameters with destructuring, not as object
+            const matchDetails = await DefaultService.getMatch({
+                matchId: Number(matchId),
+                key: API_KEY
+            });
             console.log('✅ Got match details');
             
             // For now, return basic structure - we can expand this later
@@ -676,7 +724,7 @@ export class MatchAnalysisService {
             console.log(`🎯 Starting comprehensive analysis for match ID: ${options.matchId}`);
             
             // Step 1: Get basic match details
-            const matchDetails = await DefaultService.getMatch(options.matchId, API_KEY);
+            const matchDetails = await DefaultService.getMatch({ matchId: options.matchId, key: API_KEY });
             console.log('✅ Retrieved match details');
             
             if (!matchDetails?.data) {

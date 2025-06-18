@@ -97,9 +97,16 @@ export class MatchController {
    */
   async getMatchById(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
+      console.log(`🔍 MatchController.getMatchById - req.params:`, req.params);
+      console.log(`🔍 MatchController.getMatchById - req.params.id:`, req.params.id);
+      console.log(`🔍 MatchController.getMatchById - typeof req.params.id:`, typeof req.params.id);
+
       const matchId = parseInt(req.params.id);
-      
+      console.log(`🔍 MatchController.getMatchById - parsed matchId:`, matchId);
+      console.log(`🔍 MatchController.getMatchById - typeof matchId:`, typeof matchId);
+
       if (isNaN(matchId)) {
+        console.log(`❌ MatchController.getMatchById - matchId is NaN`);
         res.status(400).json({
           success: false,
           message: 'Invalid match ID format'
@@ -108,8 +115,14 @@ export class MatchController {
       }
 
       logger.info(`🔍 Getting detailed info for match ${matchId}`);
-      
+      console.log(`🔍 MatchController.getMatchById - Calling getDetailedMatchInfo with matchId:`, matchId);
+      console.log(`🔍 MatchController.getMatchById - this.matchAnalysisService:`, this.matchAnalysisService);
+      console.log(`🔍 MatchController.getMatchById - typeof this.matchAnalysisService.getDetailedMatchInfo:`, typeof this.matchAnalysisService.getDetailedMatchInfo);
+      console.log(`🔍 MatchController.getMatchById - About to call getDetailedMatchInfo...`);
+
       const result: DetailedMatchInfo = await this.matchAnalysisService.getDetailedMatchInfo(matchId);
+
+      console.log(`🔍 MatchController.getMatchById - getDetailedMatchInfo returned:`, result);
 
       if (!result.success) {
         res.status(404).json({

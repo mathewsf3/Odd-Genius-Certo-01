@@ -11,11 +11,15 @@
 import { motion } from 'framer-motion';
 import { BarChart3, Clock, RefreshCw } from 'lucide-react';
 import React from 'react';
-import { useDashboardData } from '../hooks/useMatchData';
+import { useDashboardData } from '../hooks/useDashboardData';
 import { cn } from '../lib/utils';
 import MatchCard from './MatchCard';
 
-const Dashboard: React.FC = () => {
+interface DashboardProps {
+  onAnalyzeMatch?: (matchId: number) => void;
+}
+
+const Dashboard: React.FC<DashboardProps> = ({ onAnalyzeMatch }) => {
   // ✅ OPTIMIZED: Single API call for all dashboard data
   const {
     data: dashboardData,
@@ -35,7 +39,16 @@ const Dashboard: React.FC = () => {
   };
 
   const handleAnalyzeMatch = (matchId: number) => {
-    window.location.href = `/partida/${matchId}/analise`;
+    console.log(`🎯 Dashboard.tsx - handleAnalyzeMatch chamado com matchId: ${matchId}`);
+    console.log(`🎯 Dashboard.tsx - onAnalyzeMatch prop existe: ${!!onAnalyzeMatch}`);
+    if (onAnalyzeMatch) {
+      console.log(`🎯 Dashboard.tsx - Chamando onAnalyzeMatch prop`);
+      onAnalyzeMatch(matchId);
+    } else {
+      console.log(`🎯 Dashboard.tsx - Usando fallback navigation`);
+      // Fallback for direct navigation
+      window.location.href = `/partida/${matchId}/analise`;
+    }
   };
 
   // ✅ DEBUG LOGS

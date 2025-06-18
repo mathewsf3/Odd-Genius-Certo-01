@@ -179,7 +179,13 @@ export class LiveMatchService {
             status: match.status,
             matchTime: new Date(matchTime * 1000).toISOString(),
             timeDiff: `${Math.floor(timeDiff / 60)} minutes`,
-            score: `${match.homeGoalCount || 0}-${match.awayGoalCount || 0}`
+            homeGoalCount: match.homeGoalCount,
+            awayGoalCount: match.awayGoalCount,
+            home_score: match.home_score,
+            away_score: match.away_score,
+            score_home: match.score_home,
+            score_away: match.score_away,
+            finalScore: `${match.homeGoalCount || match.home_score || match.score_home || 0}-${match.awayGoalCount || match.away_score || match.score_away || 0}`
           });
         }
 
@@ -227,32 +233,56 @@ export class LiveMatchService {
     const now = new Date();
     const nextUpdate = new Date(now.getTime() + 30000);
 
-    // ✅ TRANSFORM TO FRONTEND FORMAT - Fix score display issue
+    // ✅ TRANSFORM TO FRONTEND FORMAT - Use frontend-compatible structure
     const normalizedMatches = liveMatches.map(rawMatch => {
       try {
-        return normalizeFootyStatsMatch(rawMatch);
+        // Use frontend-compatible format directly
+        return {
+          id: rawMatch.id || 0,
+          homeID: rawMatch.homeID || rawMatch.home_team_id || 0,
+          awayID: rawMatch.awayID || rawMatch.away_team_id || 0,
+          home_name: rawMatch.home_name || 'Time Casa',
+          away_name: rawMatch.away_name || 'Time Visitante',
+          home_image: rawMatch.home_image || '/default-team.svg',
+          away_image: rawMatch.away_image || '/default-team.svg',
+          homeGoalCount: rawMatch.homeGoalCount || rawMatch.home_score || rawMatch.score_home || 0,
+          awayGoalCount: rawMatch.awayGoalCount || rawMatch.away_score || rawMatch.score_away || 0,
+          status: 'live',
+          date_unix: rawMatch.date_unix || Math.floor(Date.now() / 1000),
+          stadium_name: rawMatch.stadium_name || 'Estádio',
+          stadium_location: rawMatch.stadium_location || 'Cidade',
+          competition_id: rawMatch.competition_id || 0,
+          competition_name: rawMatch.competition_name || 'Liga',
+          country_name: rawMatch.country_name || 'País'
+        };
       } catch (error) {
         console.error(`❌ Error normalizing match ${rawMatch.id}:`, error);
         // Return a basic fallback if normalization fails
         return {
           id: rawMatch.id || 0,
-          timeCasa: { id: rawMatch.homeID || 0, nome: rawMatch.home_name || 'Time Casa', logo: rawMatch.home_image || '' },
-          timeVisitante: { id: rawMatch.awayID || 0, nome: rawMatch.away_name || 'Time Visitante', logo: rawMatch.away_image || '' },
-          placarCasa: rawMatch.homeGoalCount || 0,
-          placarVisitante: rawMatch.awayGoalCount || 0,
-          status: 'ao-vivo' as const,
-          dataHora: new Date().toISOString(),
-          horario: new Date().toLocaleTimeString('pt-BR'),
-          estadio: { nome: rawMatch.stadium_name || 'Estádio', cidade: rawMatch.stadium_location || 'Cidade' },
-          liga: { id: rawMatch.competition_id || 0, nome: 'Liga', logo: '', pais: 'País' }
-        } as MatchData;
+          homeID: rawMatch.homeID || 0,
+          awayID: rawMatch.awayID || 0,
+          home_name: rawMatch.home_name || 'Time Casa',
+          away_name: rawMatch.away_name || 'Time Visitante',
+          home_image: '/default-team.svg',
+          away_image: '/default-team.svg',
+          homeGoalCount: 0,
+          awayGoalCount: 0,
+          status: 'live' as const,
+          date_unix: Math.floor(Date.now() / 1000),
+          stadium_name: 'Estádio',
+          stadium_location: 'Cidade',
+          competition_id: 0,
+          competition_name: 'Liga',
+          country_name: 'País'
+        };
       }
     });
 
     // Log live matches for debugging
     console.log('🔴 LIVE MATCHES WITH SCORES:');
     normalizedMatches.forEach(match => {
-      console.log(`  ${match.timeCasa.nome} ${match.placarCasa}-${match.placarVisitante} ${match.timeVisitante.nome} (${match.status})`);
+      console.log(`  ${match.home_name} ${match.homeGoalCount}-${match.awayGoalCount} ${match.away_name} (${match.status})`);
     });
 
     return {
@@ -335,25 +365,49 @@ export class LiveMatchService {
 
       console.log(`📅 Found ${resultMatches.length} upcoming matches`);
 
-      // ✅ TRANSFORM TO FRONTEND FORMAT - Fix score display for upcoming matches too
+      // ✅ TRANSFORM TO FRONTEND FORMAT - Use frontend-compatible structure for upcoming matches
       const normalizedUpcoming = resultMatches.map(rawMatch => {
         try {
-          return normalizeFootyStatsMatch(rawMatch);
+          // Use frontend-compatible format directly
+          return {
+            id: rawMatch.id || 0,
+            homeID: rawMatch.homeID || rawMatch.home_team_id || 0,
+            awayID: rawMatch.awayID || rawMatch.away_team_id || 0,
+            home_name: rawMatch.home_name || 'Time Casa',
+            away_name: rawMatch.away_name || 'Time Visitante',
+            home_image: rawMatch.home_image || '/default-team.svg',
+            away_image: rawMatch.away_image || '/default-team.svg',
+            homeGoalCount: 0, // Upcoming matches have no score yet
+            awayGoalCount: 0,
+            status: 'upcoming',
+            date_unix: rawMatch.date_unix || Math.floor(Date.now() / 1000),
+            stadium_name: rawMatch.stadium_name || 'Estádio',
+            stadium_location: rawMatch.stadium_location || 'Cidade',
+            competition_id: rawMatch.competition_id || 0,
+            competition_name: rawMatch.competition_name || 'Liga',
+            country_name: rawMatch.country_name || 'País'
+          };
         } catch (error) {
           console.error(`❌ Error normalizing upcoming match ${rawMatch.id}:`, error);
           // Return a basic fallback if normalization fails
           return {
             id: rawMatch.id || 0,
-            timeCasa: { id: rawMatch.homeID || 0, nome: rawMatch.home_name || 'Time Casa', logo: rawMatch.home_image || '' },
-            timeVisitante: { id: rawMatch.awayID || 0, nome: rawMatch.away_name || 'Time Visitante', logo: rawMatch.away_image || '' },
-            placarCasa: 0,
-            placarVisitante: 0,
-            status: 'agendada' as const,
-            dataHora: new Date().toISOString(),
-            horario: new Date().toLocaleTimeString('pt-BR'),
-            estadio: { nome: rawMatch.stadium_name || 'Estádio', cidade: rawMatch.stadium_location || 'Cidade' },
-            liga: { id: rawMatch.competition_id || 0, nome: 'Liga', logo: '', pais: 'País' }
-          } as MatchData;
+            homeID: rawMatch.homeID || 0,
+            awayID: rawMatch.awayID || 0,
+            home_name: rawMatch.home_name || 'Time Casa',
+            away_name: rawMatch.away_name || 'Time Visitante',
+            home_image: '/default-team.svg',
+            away_image: '/default-team.svg',
+            homeGoalCount: 0,
+            awayGoalCount: 0,
+            status: 'upcoming' as const,
+            date_unix: Math.floor(Date.now() / 1000),
+            stadium_name: 'Estádio',
+            stadium_location: 'Cidade',
+            competition_id: 0,
+            competition_name: 'Liga',
+            country_name: 'País'
+          };
         }
       });
 

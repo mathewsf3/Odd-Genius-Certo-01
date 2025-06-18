@@ -11,11 +11,15 @@
 import { useState } from 'react';
 import { useAllLiveMatches } from '../hooks/useMatchData';
 
+interface LiveCenterProps {
+  onAnalyzeMatch?: (matchId: number) => void;
+}
+
 /**
  * 🎯 LIVE CENTER COMPONENT
  * Centro de controle para partidas ao vivo
  */
-export default function LiveCenter() {
+export default function LiveCenter({ onAnalyzeMatch }: LiveCenterProps) {
   const [selectedMatch, setSelectedMatch] = useState<any | null>(null);
 
   // ✅ HOOKS FOR LIVE DATA - Using existing backend
@@ -117,7 +121,7 @@ export default function LiveCenter() {
           {/* 📊 PAINEL AO VIVO */}
           <section className="lg:col-span-2">
             {selectedMatch ? (
-              <LiveMatchPanel match={selectedMatch} />
+              <LiveMatchPanel match={selectedMatch} onAnalyzeMatch={onAnalyzeMatch} />
             ) : (
               <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
                 <div className="text-gray-400 text-4xl mb-4">👆</div>
@@ -140,9 +144,10 @@ export default function LiveCenter() {
  */
 interface LiveMatchPanelProps {
   match: any;
+  onAnalyzeMatch?: (matchId: number) => void;
 }
 
-function LiveMatchPanel({ match }: LiveMatchPanelProps) {
+function LiveMatchPanel({ match, onAnalyzeMatch }: LiveMatchPanelProps) {
 
   return (
     <div className="bg-white rounded-lg shadow-sm border p-6 space-y-6">
@@ -163,6 +168,15 @@ function LiveMatchPanel({ match }: LiveMatchPanelProps) {
         </div>
 
         <p className="text-sm text-gray-600">{match.leagueName || match.league_name || 'Liga'}</p>
+
+        {onAnalyzeMatch && (
+          <button
+            onClick={() => onAnalyzeMatch(match.id)}
+            className="mt-4 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+          >
+            Analisar Partida
+          </button>
+        )}
       </div>
 
       {/* 📈 ESTATÍSTICAS EM TEMPO REAL */}
